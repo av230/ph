@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת התראות חכמה - פיקוד העורף</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f4f7fa;
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #cc0000;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 20px;
+        }
+
+        .city-selector {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .city-selector h2 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+            font-size: 1.5em;
+        }
+
+        .city-input {
+            width: 100%;
+            max-width: 300px;
+            padding: 12px;
+            font-size: 1em;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+            transition: border-color 0.3s ease;
+        }
+
+        .city-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 15px 0;
+            justify-content: center;
+        }
+
+        .audio-controls label {
+            font-size: 1em;
+            color: #2c3e50;
+        }
+
+        .audio-controls input[type="range"] {
+            width: 100px;
+        }
+
+        .audio-controls button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .audio-controls button:hover {
+            background: #45a049;
+        }
+
+        .status-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .status-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+            border-left: 4px solid #ddd;
+            transition: transform 0.3s ease;
+        }
+
+        .status-card.safe {
+            border-left-color: #4CAF50;
+        }
+
+        .status-card.warning {
+            border-left-color: #ff9800;
+            animation: pulse 2s infinite;
+        }
+
+        .status-card.danger {
+            border-left-color: #f44336;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); }
+            50% { box-shadow: 0 6px 15px rgba(244, 67, 54, 0.3); }
+            100% { box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); }
+        }
+
+        .status-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-icon {
+            font-size: 1.3em;
+        }
+
+        .status-time {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 8px;
+        }
+
+        .status-description {
+            color: #555;
+            line-height: 1.4;
+        }
+
+        .history-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .history-item {
+            padding: 12px;
+            border-right: 3px solid #ddd;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            transition: transform 0.3s ease;
+        }
+
+        .history-item:hover {
+            transform: translateX(-3px);
+        }
+
+        .history-item.early-warning {
+            border-right-color: #ff9800;
+        }
+
+        .history-item.shelter {
+            border-right-color: #f44336;
+        }
+
+        .history-item.all-clear {
+            border-right-color: #4CAF50;
+        }
+
+        .history-time {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .history-type {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .history-description {
+            color: #555;
+        }
+
+        .refresh-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .refresh-btn:hover {
+            background: #1976D2;
+        }
+
+        .no-city {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 15px;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            background: #4CAF50;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+        }
+
+        .connection-status.disconnected {
+            background: #f44336;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 15px;
+            }
+            .header h1 {
+                font-size: 1.5em;
+            }
+            .status-section {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">🔗 מחובר לשרת</div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🚨 מערכת התראות חכמה</h1>
+            <p>מעקב אחר התראות פיקוד העורף בזמן אמת</p>
+        </div>
+
+        <div class="main-content">
+            <div class="city-selector">
+                <h2>בחר את העיר שלך</h2>
+                <select id="cityInput" class="city-input">
+                    <option value="">בחר עיר</option>
+                    <option value="בני ברק">בני ברק</option>
+                    <option value="תל אביב">תל אביב</option>
+                    <option value="ירושלים">ירושלים</option>
+                    <option value="חיפה">חיפה</option>
+                    <option value="אשדוד">אשדוד</option>
+                    <option value="אשקלון">אשקלון</option>
+                    <option value="באר שבע">באר שבע</option>
+                    <option value="נתניה">נתניה</option>
+                    <option value="חולון">חולון</option>
+                    <option value="רמת גן">רמת גן</option>
+                </select>
+                <div class="audio-controls">
+                    <label for="volume">עוצמת קול:</label>
+                    <input type="range" id="volume" min="0" max="1" step="0.1" value="0.5">
+                    <button id="mute">השתק</button>
+                </div>
+            </div>
+
+            <div id="alertSystem" style="display: none;">
+                <div class="status-section">
+                    <div class="status-card safe" id="currentStatus">
+                        <div class="status-title">
+                            <span class="status-icon">✅</span>
+                            מצב רגיל
+                        </div>
+                        <div class="status-time" id="statusTime">עדכון אחרון: עכשיו</div>
+                        <div class="status-description">אין התראות פעילות באזור שלך</div>
+                    </div>
+
+                    <div class="status-card">
+                        <div class="status-title">
+                            <span class="status-icon">📍</span>
+                            עיר רשומה
+                        </div>
+                        <div class="status-description" id="registeredCity">לא נבחרה עיר</div>
+                    </div>
+
+                    <div class="status-card">
+                        <div class="status-title">
+                            <span class="status-icon">⏱️</span>
+                            זמן לממ"ד
+                        </div>
+                        <div class="status-description" id="shelterTime">מידע יופיע בעת התראה</div>
+                    </div>
+                </div>
+
+                <div class="history-section">
+                    <div class="history-header">
+                        <h2>🕘 היסטוריית התראות</h2>
+                        <button class="refresh-btn" onclick="refreshHistory()">רענן</button>
+                    </div>
+                    <div id="alertHistory">
+                        <div class="no-city">בחר עיר להצגת היסטוריה</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="pre-alert-sound" src="https://cdn.pixabay.com/download/audio/2022/03/10/audio_8d9b4e6f3c.mp3"></audio>
+    <audio id="enter-sound" src="https://cdn.pixabay.com/download/audio/2022/03/10/audio_7b1a4e3f2c.mp3"></audio>
+    <audio id="exit-sound" src="https://cdn.pixabay.com/download/audio/2022/03/10/audio_3f2a1e6b9c.mp3"></audio>
+
+    <script>
+        let currentCity = '';
+        let isConnected = true;
+        let lastAlertId = null;
+        let alertHistory = [];
+        let isMuted = localStorage.getItem('isMuted') === 'true';
+        const volumeControl = document.getElementById('volume');
+        const muteButton = document.getElementById('mute');
+        const preAlertSound = document.getElementById('pre-alert-sound');
+        const enterSound = document.getElementById('enter-sound');
+        const exitSound = document.getElementById('exit-sound');
+
+        // City data with shelter times
+        const cityData = {
+            'בני ברק': { zone: 'דן', shelterTime: 90 },
+            'תל אביב': { zone: 'דן', shelterTime: 90 },
+            'ירושלים': { zone: 'ירושלים', shelterTime: 90 },
+            'חיפה': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'אשדוד': { zone: 'אשקלון והסביבה', shelterTime: 30 },
+            'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30 },
+            'באר שבע': { zone: 'באר שבע והנגב', shelterTime: 60 },
+            'נתניה': { zone: 'שרון', shelterTime: 45 },
+            'חולון': { zone: 'דן', shelterTime: 90 },
+            'רמת גן': { zone: 'דן', shelterTime: 90 }
+        };
+
+        // Initialize audio settings
+        const savedVolume = localStorage.getItem('volume') || 0.5;
+        preAlertSound.volume = savedVolume;
+        enterSound.volume = savedVolume;
+        exitSound.volume = savedVolume;
+        volumeControl.value = savedVolume;
+        muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
+        if (isMuted) {
+            preAlertSound.muted = true;
+            enterSound.muted = true;
+            exitSound.muted = true;
+        }
+
+        // Volume control
+        volumeControl.addEventListener('input', (e) => {
+            const volume = e.target.value;
+            preAlertSound.volume = volume;
+            enterSound.volume = volume;
+            exitSound.volume = volume;
+            localStorage.setItem('volume', volume);
+        });
+
+        // Mute toggle
+        muteButton.addEventListener('click', () => {
+            isMuted = !isMuted;
+            preAlertSound.muted = isMuted;
+            enterSound.muted = isMuted;
+            exitSound.muted = isMuted;
+            muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
+            localStorage.setItem('isMuted', isMuted);
+        });
+
+        function registerCity() {
+            const cityInput = document.getElementById('cityInput');
+            const city = cityInput.value;
+            if (!city) {
+                showNotification('אנא בחר עיר', 'danger');
+                return;
+            }
+            currentCity = city;
+            document.getElementById('registeredCity').textContent = city;
+            document.getElementById('alertSystem').style.display = 'block';
+            fetchHistory(city);
+            fetchRealTimeAlerts();
+            showNotification(`נרשמת בהצלחה להתראות עבור ${city}`, 'success');
+        }
+
+        function categorizeAlert(alert) {
+            const message = (alert.message || '').toLowerCase();
+            if (message.includes('התראה מוקדמת') || message.includes('הכן מרחב מוגן')) {
+                return { type: 'early-warning', title: 'התראה מוקדמת', icon: '⚠️', description: 'זוהה שיגור לכיוון האזור - היו מוכנים', class: 'warning' };
+            } else if (message.includes('כניסה למרחב מוגן') || message.includes('אזעקה')) {
+                return { type: 'shelter', title: 'היכנסו לממ"ד מיידית!', icon: '🚨', description: 'אזעקה באזור - היכנסו לחדר המוגן עכשיו!', class: 'danger' };
+            } else if (message.includes('שחרור') || message.includes('חזרה לשגרה')) {
+                return { type: 'all-clear', title: 'יציאה מהממ"ד', icon: '🟢', description: 'הסכנה חלפה - ניתן לצאת מהחדר המוגן', class: 'safe' };
+            }
+            return { type: 'safe', title: 'מצב רגיל', icon: '✅', description: 'אין התראות פעילות באזור שלך', class: 'safe' };
+        }
+
+        async function fetchRealTimeAlerts() {
+            try {
+                const response = await fetch('https://www.oref.org.il/WarningMessages/alerts.json');
+                const data = await response.json();
+                const statusCard = document.getElementById('currentStatus');
+                const statusIcon = statusCard.querySelector('.status-icon');
+                const statusTitle = statusCard.querySelector('.status-title');
+                const statusDescription = statusCard.querySelector('.status-description');
+                const statusTime = document.getElementById('statusTime');
+                const shelterTimeElement = document.getElementById('shelterTime');
+
+                if (data.data && currentCity && data.data.some(alert => alert.cities.includes(currentCity))) {
+                    const relevantAlert = data.data.find(alert => alert.cities.includes(currentCity));
+                    if (relevantAlert.id !== lastAlertId) {
+                        lastAlertId = relevantAlert.id;
+                        const alert = categorizeAlert(relevantAlert);
+                        updateAlertStatus(alert);
+                        addToHistory(alert);
+                        if (!isMuted) {
+                            if (alert.type === 'early-warning') {
+                                preAlertSound.play().catch(e => console.error('Error playing pre-alert sound:', e));
+                            } else if (alert.type === 'shelter') {
+                                enterSound.play().catch(e => console.error('Error playing enter sound:', e));
+                            } else if (alert.type === 'all-clear') {
+                                exitSound.play().catch(e => console.error('Error playing exit sound:', e));
+                            }
+                        }
+                        showNotification(`${alert.icon} ${alert.title} ב${currentCity}`, alert.class);
+                        document.title = alert.type === 'shelter' ? `🚨 אזעקה - ${currentCity}` : 'מערכת התראות חכמה';
+                    }
+                } else {
+                    const safeStatus = { type: 'safe', title: 'מצב רגיל', icon: '✅', description: 'אין התראות פעילות באזור שלך', class: 'safe' };
+                    updateAlertStatus(safeStatus);
+                }
+                updateConnectionStatus(true);
+            } catch (error) {
+                console.error('Error fetching real-time alerts:', error);
+                updateConnectionStatus(false);
+            }
+            updateStatusTime();
+        }
+
+        async function fetchHistory(city) {
+            try {
+                const response = await fetch(`https://alerts-history.oref.org.il//Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1&city_0=${encodeURIComponent(city)}`);
+                const data = await response.json();
+                alertHistory = data.map(alert => {
+                    const categorized = categorizeAlert(alert);
+                    return {
+                        time: alert.time,
+                        type: categorized.type,
+                        title: categorized.title,
+                        description: categorized.description,
+                        city: currentCity
+                    };
+                }).slice(0, 20);
+                renderHistory();
+            } catch (error) {
+                console.error('Error fetching history:', error);
+                showNotification('שגיאה בטעינת היסטוריה', 'danger');
+            }
+        }
+
+        function updateAlertStatus(alert) {
+            const statusCard = document.getElementById('currentStatus');
+            const statusIcon = statusCard.querySelector('.status-icon');
+            const statusTitle = statusCard.querySelector('.status-title');
+            const statusDescription = statusCard.querySelector('.status-description');
+            const shelterTimeElement = document.getElementById('shelterTime');
+
+            statusCard.className = `status-card ${alert.class}`;
+            statusIcon.textContent = alert.icon;
+            statusTitle.childNodes[1].textContent = alert.title;
+            statusDescription.textContent = alert.description;
+
+            if (alert.type === 'shelter' || alert.type === 'early-warning') {
+                const cityInfo = cityData[currentCity];
+                shelterTimeElement.textContent = cityInfo ? `${cityInfo.shelterTime} שניות` : 'מידע יופיע בעת התראה';
+            } else {
+                shelterTimeElement.textContent = 'מידע יופיע בעת התראה';
+            }
+        }
+
+        function addToHistory(alert) {
+            const now = new Date();
+            alertHistory.unshift({
+                time: now.toLocaleString('he-IL'),
+                type: alert.type,
+                title: alert.title,
+                description: alert.description,
+                city: currentCity
+            });
+            if (alertHistory.length > 20) {
+                alertHistory = alertHistory.slice(0, 20);
+            }
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const historyContainer = document.getElementById('alertHistory');
+            if (alertHistory.length === 0) {
+                historyContainer.innerHTML = '<div class="no-city">אין היסטוריית התראות עדיין</div>';
+                return;
+            }
+            const historyHTML = alertHistory.map(item => `
+                <div class="history-item ${item.type}">
+                    <div class="history-time">${item.time}</div>
+                    <div class="history-type">${getAlertTypeText(item.type)} - ${item.city}</div>
+                    <div class="history-description">${item.description}</div>
+                </div>
+            `).join('');
+            historyContainer.innerHTML = historyHTML;
+        }
+
+        function getAlertTypeText(type) {
+            const types = {
+                'safe': 'מצב רגיל',
+                'early-warning': 'התראה מוקדמת',
+                'shelter': 'כניסה לממ"ד',
+                'all-clear': 'יציאה מממ"ד'
+            };
+            return types[type] || type;
+        }
+
+        function refreshHistory() {
+            showNotification('מרענן היסטוריה...', 'info');
+            fetchHistory(currentCity);
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            isConnected = connected;
+            statusElement.textContent = connected ? '🔗 מחובר לשרת' : '❌ לא מחובר';
+            statusElement.classList.toggle('disconnected', !connected);
+        }
+
+        function updateStatusTime() {
+            const timeElement = document.getElementById('statusTime');
+            const now = new Date();
+            timeElement.textContent = `עדכון אחרון: ${now.toLocaleTimeString('he-IL')}`;
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                background: ${type === 'danger' ? '#f44336' : type === 'warning' ? '#ff9800' : type === 'success' ? '#4CAF50' : '#2196F3'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+                z-index: 1001;
+                max-width: 300px;
+                font-weight: bold;
+                animation: slideIn 0.3s ease-out;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-in';
+                setTimeout(() => document.body.removeChild(notification), 300);
+            }, 5000);
+        }
+
+        // Animations for notifications
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Event listeners
+        document.getElementById('cityInput').addEventListener('change', registerCity);
+        setInterval(fetchRealTimeAlerts, 10000);
+        console.log('מערכת התראות חכמה פועלת');
+    </script>
+</body>
+</html>
