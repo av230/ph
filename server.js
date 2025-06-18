@@ -1,13 +1,11 @@
-// server.js - שרת Node.js למערכת התראות פיקוד העורף
+// server.js - מערכת התראות חכמה עם API אמיתי של כל רגע
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const fs = require('fs');
-
-// ייבוא ה-API של פיקוד העורף
-const pikudHaoref = require('pikud-haoref-api');
+const axios = require('axios');
 
 const app = express();
 const server = http.createServer(app);
@@ -37,13 +35,29 @@ const cityData = {
     'רעננה': { zone: 'שרון', shelterTime: 90, area: 1082 },
     'כפר סבא': { zone: 'שרון', shelterTime: 90, area: 1084 },
     'עפולה': { zone: 'עמק יזרעאל', shelterTime: 60, area: 77 },
-    'נצרת': { zone: 'עמק יזרעאל', shelterTime: 60, area: 78 }
+    'נצרת': { zone: 'עמק יזרעאל', shelterTime: 60, area: 78 },
+    'טבריה': { zone: 'כינרת', shelterTime: 60, area: 79 },
+    'צפת': { zone: 'גליל עליון', shelterTime: 60, area: 133 },
+    'אילת': { zone: 'אילת', shelterTime: 180, area: 88 },
+    'מודיעין': { zone: 'מודיעין', shelterTime: 90, area: 1166 },
+    'כרמיאל': { zone: 'גליל מערבי', shelterTime: 60, area: 134 },
+    'מעלות': { zone: 'גליל מערבי', shelterTime: 60, area: 135 },
+    'נהריה': { zone: 'גליל מערבי', shelterTime: 60, area: 136 },
+    'עכו': { zone: 'גליל מערבי', shelterTime: 60, area: 137 },
+    'קרית שמונה': { zone: 'גליל עליון', shelterTime: 30, area: 138 },
+    'מטולה': { zone: 'גליל עליון', shelterTime: 15, area: 139 },
+    'קצרין': { zone: 'גולן', shelterTime: 60, area: 140 },
+    'אריאל': { zone: 'שומרון', shelterTime: 90, area: 141 },
+    'מעלה אדומים': { zone: 'ירושלים', shelterTime: 90, area: 142 },
+    'בית שמש': { zone: 'ירושלים', shelterTime: 90, area: 143 }
 };
 
 // משתנים גלובליים
 let alertHistory = [];
 let lastAlert = null;
+let lastAlertId = null;
 let connectedUsers = new Map();
+let isLiveMode = true;
 
 // Middleware
 app.use(cors());
@@ -52,7 +66,7 @@ app.use(express.static('public'));
 
 // API Routes
 app.get('/api/cities', (req, res) => {
-    res.json(Object.keys(cityData));
+    res.json(Object.keys(cityData).sort());
 });
 
 app.get('/api/city/:name', (req, res) => {
@@ -68,7 +82,8 @@ app.get('/api/city/:name', (req, res) => {
 app.get('/api/alerts/current', (req, res) => {
     res.json({ 
         alert: lastAlert,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        mode: isLiveMode ? 'live' : 'simulation'
     });
 });
 
@@ -83,121 +98,166 @@ app.get('/api/alerts/history/:city?', (req, res) => {
         );
     }
     
-    res.json(history.slice(0, 50)); // 50 התראות אחרונות
+    res.json(history.slice(0, 50));
+});
+
+app.get('/api/status', (req, res) => {
+    res.json({
+        status: 'running',
+        mode: isLiveMode ? 'live' : 'simulation',
+        connectedUsers: connectedUsers.size,
+        lastAlert: lastAlert,
+        uptime: process.uptime(),
+        alertCount: alertHistory.length
+    });
 });
 
 // WebSocket חיבורים
 io.on('connection', (socket) => {
-    console.log(`משתמש חדש התחבר: ${socket.id}`);
+    console.log(`🔗 משתמש חדש התחבר: ${socket.id}`);
+    
+    socket.emit('connection-status', {
+        connected: true,
+        mode: isLiveMode ? 'live' : 'simulation',
+        serverTime: new Date().toISOString()
+    });
     
     socket.on('register-city', (cityName) => {
-        console.log(`משתמש ${socket.id} נרשם לעיר: ${cityName}`);
+        console.log(`📍 משתמש ${socket.id} נרשם לעיר: ${cityName}`);
         connectedUsers.set(socket.id, { 
             cityName, 
-            connectedAt: new Date() 
+            connectedAt: new Date(),
+            lastSeen: new Date()
         });
         
-        // שלח את המצב הנוכחי
         if (lastAlert) {
             socket.emit('alert-update', lastAlert);
         }
+        
+        const cityHistory = alertHistory.filter(alert => 
+            !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
+        ).slice(0, 20);
+        
+        socket.emit('history-update', cityHistory);
     });
     
     socket.on('get-history', (cityName) => {
         const cityHistory = alertHistory.filter(alert => 
-            alert.cities && alert.cities.includes(cityName)
+            !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
         ).slice(0, 20);
         
         socket.emit('history-update', cityHistory);
     });
     
     socket.on('disconnect', () => {
-        console.log(`משתמש ${socket.id} התנתק`);
+        console.log(`❌ משתמש ${socket.id} התנתק`);
         connectedUsers.delete(socket.id);
     });
 });
 
-// פונקציה לקטגוריזציה של התראות
-function categorizeAlert(alert) {
-    if (!alert || !alert.type) {
+// פונקציות מיפוי והמרה
+function mapAlertTypeFromKore(koreAlert) {
+    if (!koreAlert || !koreAlert.title) {
         return {
             type: 'safe',
             title: 'מצב רגיל',
             icon: '✅',
-            description: 'אין התראות פעילות',
-            severity: 'low'
+            description: 'אין התראות פעילות כרגע',
+            severity: 'low',
+            class: 'safe'
         };
     }
     
-    switch (alert.type) {
-        case 'newsFlash':
-        case 'earlyWarning':
-            return {
-                type: 'early-warning',
-                title: 'התראה מוקדמת',
-                icon: '⚠️',
-                description: 'זוהה שיגור לכיוון האזור - הכינו מרחב מוגן',
-                severity: 'medium'
-            };
-            
-        case 'missiles':
-            return {
-                type: 'shelter',
-                title: 'היכנסו לממ"ד מיידית!',
-                icon: '🚨',
-                description: 'אזעקה באזור - היכנסו לחדר המוגן עכשיו!',
-                severity: 'high'
-            };
-            
-        case 'radiologicalEvent':
-            return {
-                type: 'radiological',
-                title: 'אירוע רדיולוגי',
-                icon: '☢️',
-                description: 'אירוע רדיולוגי באזור - פעלו לפי הנחיות',
-                severity: 'high'
-            };
-            
-        case 'earthQuake':
-            return {
-                type: 'earthquake',
-                title: 'רעידת אדמה',
-                icon: '🌍',
-                description: 'זוהתה רעידת אדמה - התרחקו מחפצים שעלולים ליפול',
-                severity: 'medium'
-            };
-            
-        default:
-            return {
-                type: 'unknown',
-                title: 'התראה לא מוכרת',
-                icon: '❓',
-                description: alert.instructions || 'פעלו לפי הנחיות הרשויות',
-                severity: 'medium'
-            };
+    const title = koreAlert.title.toLowerCase();
+    
+    if (title.includes('רקטות') || title.includes('טילים') || title.includes('ירי')) {
+        return {
+            type: 'shelter',
+            title: 'היכנסו לממ"ד מיידית!',
+            icon: '🚨',
+            description: `${koreAlert.title} - ${koreAlert.desc}`,
+            severity: 'high',
+            class: 'danger'
+        };
+    } else if (title.includes('התראה') || title.includes('חירום')) {
+        return {
+            type: 'early-warning',
+            title: 'התראה מוקדמת',
+            icon: '⚠️',
+            description: `${koreAlert.title} - ${koreAlert.desc}`,
+            severity: 'medium',
+            class: 'warning'
+        };
+    } else if (title.includes('תרגיל')) {
+        return {
+            type: 'drill',
+            title: 'תרגיל',
+            icon: '🎯',
+            description: `${koreAlert.title} - ${koreAlert.desc}`,
+            severity: 'medium',
+            class: 'warning'
+        };
+    } else {
+        return {
+            type: 'unknown',
+            title: koreAlert.title,
+            icon: '❓',
+            description: koreAlert.desc || 'פעלו לפי הנחיות הרשויות',
+            severity: 'medium',
+            class: 'warning'
+        };
     }
 }
 
-// פונקציה לשליחת התראות למשתמשים רלוונטיים
+function getCityMatchesFromAlert(alertCities) {
+    const matches = [];
+    const alertCitiesLower = alertCities.map(city => city.toLowerCase());
+    
+    // חיפוש התאמות מדוייקות
+    Object.keys(cityData).forEach(ourCity => {
+        const ourCityLower = ourCity.toLowerCase();
+        
+        // התאמה מדוייקת
+        if (alertCitiesLower.includes(ourCityLower)) {
+            matches.push(ourCity);
+            return;
+        }
+        
+        // התאמה חלקית
+        for (const alertCity of alertCitiesLower) {
+            if (alertCity.includes(ourCityLower) || ourCityLower.includes(alertCity)) {
+                matches.push(ourCity);
+                break;
+            }
+        }
+    });
+    
+    return [...new Set(matches)]; // הסר כפילויות
+}
+
+// פונקציות התראות
 function notifyRelevantUsers(alert) {
-    if (!alert.cities || alert.cities.length === 0) return;
+    if (!alert.cities || alert.cities.length === 0) {
+        io.emit('alert-update', alert);
+        console.log(`📢 שולח התראה כללית ל-${connectedUsers.size} משתמשים`);
+        return;
+    }
     
     connectedUsers.forEach((userData, socketId) => {
         if (alert.cities.includes(userData.cityName)) {
             const socket = io.sockets.sockets.get(socketId);
             if (socket) {
                 socket.emit('alert-update', alert);
-                console.log(`שולח התראה למשתמש ${socketId} בעיר ${userData.cityName}`);
+                console.log(`📱 שולח התראה למשתמש ${socketId} בעיר ${userData.cityName}`);
             }
         }
     });
 }
 
-// פונקציה לשמירת התראה בהיסטוריה
 function saveToHistory(alert) {
     const historyEntry = {
         ...alert,
-        id: Date.now(),
+        id: Date.now() + Math.random(),
         timestamp: new Date().toISOString(),
         hebrewTime: new Date().toLocaleString('he-IL', {
             timeZone: 'Asia/Jerusalem',
@@ -212,66 +272,149 @@ function saveToHistory(alert) {
     
     alertHistory.unshift(historyEntry);
     
-    // שמור רק 1000 רשומות אחרונות
-    if (alertHistory.length > 1000) {
-        alertHistory = alertHistory.slice(0, 1000);
+    if (alertHistory.length > 500) {
+        alertHistory = alertHistory.slice(0, 500);
     }
     
-    // שמור לקובץ (אופציונלי)
-    fs.writeFileSync('alert_history.json', JSON.stringify(alertHistory, null, 2));
+    try {
+        fs.writeFileSync('alert_history.json', JSON.stringify(alertHistory, null, 2));
+    } catch (error) {
+        console.warn('לא ניתן לשמור היסטוריה:', error.message);
+    }
+}
+
+// פונקציה לבדיקת התראות מ-API של כל רגע
+async function checkKoreAPI() {
+    try {
+        console.log('🔍 בודק התראות ב-API של כל רגע...');
+        
+        const response = await axios.get('https://www.kore.co.il/redAlert.json', {
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'AlertSystem/2.0 (https://ph-7php.onrender.com)',
+                'Accept': 'application/json'
+            }
+        });
+        
+        const alertData = response.data;
+        
+        if (alertData && alertData.id) {
+            console.log(`🚨 התראה פעילה מ-Kore:`, alertData);
+            
+            // בדוק אם זו התראה חדשה
+            if (lastAlertId !== alertData.id) {
+                lastAlertId = alertData.id;
+                
+                // מיפוי סוג ההתראה
+                const categorized = mapAlertTypeFromKore(alertData);
+                
+                // מיפוי ערים
+                const matchedCities = getCityMatchesFromAlert(alertData.data || []);
+                
+                const enrichedAlert = {
+                    ...alertData,
+                    ...categorized,
+                    cities: matchedCities.length > 0 ? matchedCities : alertData.data,
+                    originalCities: alertData.data,
+                    timestamp: new Date().toISOString(),
+                    hebrewTime: new Date().toLocaleString('he-IL', {
+                        timeZone: 'Asia/Jerusalem'
+                    }),
+                    source: 'kore-api'
+                };
+                
+                console.log(`✅ התראה חדשה עובדה:`, {
+                    type: enrichedAlert.type,
+                    cities: enrichedAlert.cities,
+                    originalCities: enrichedAlert.originalCities
+                });
+                
+                lastAlert = enrichedAlert;
+                saveToHistory(enrichedAlert);
+                notifyRelevantUsers(enrichedAlert);
+                
+                io.emit('global-status', {
+                    hasActiveAlert: true,
+                    affectedAreas: enrichedAlert.cities || [],
+                    lastUpdate: enrichedAlert.timestamp,
+                    mode: 'live'
+                });
+            }
+            
+            return true; // יש התראה פעילה
+            
+        } else {
+            console.log('✅ אין התראות פעילות');
+            
+            // אם הייתה התראה לפני ועכשיו אין - זה "יציאה מממ"ד"
+            if (lastAlert && lastAlert.type !== 'safe' && lastAlert.type !== 'all-clear') {
+                const allClearAlert = {
+                    type: 'all-clear',
+                    title: 'יציאה מהממ"ד',
+                    icon: '🟢',
+                    description: 'הסכנה חלפה - ניתן לצאת מהחדר המוגן',
+                    severity: 'low',
+                    class: 'safe',
+                    cities: lastAlert.cities || [],
+                    timestamp: new Date().toISOString(),
+                    hebrewTime: new Date().toLocaleString('he-IL', {
+                        timeZone: 'Asia/Jerusalem'
+                    }),
+                    source: 'system'
+                };
+                
+                console.log('🟢 יוצר התראת יציאה מממ"ד');
+                
+                lastAlert = allClearAlert;
+                lastAlertId = null;
+                saveToHistory(allClearAlert);
+                notifyRelevantUsers(allClearAlert);
+                
+                io.emit('global-status', {
+                    hasActiveAlert: false,
+                    affectedAreas: [],
+                    lastUpdate: allClearAlert.timestamp,
+                    mode: 'live'
+                });
+            }
+            
+            return false; // אין התראה
+        }
+        
+    } catch (error) {
+        console.error('❌ שגיאה ב-API של כל רגע:', error.message);
+        return null; // שגיאה
+    }
 }
 
 // מעקב אחר התראות
 function startAlertMonitoring() {
-    console.log('מתחיל מעקב אחר התראות פיקוד העורף...');
+    console.log('🚀 מתחיל מעקב אחר התראות אמיתיות...');
     
-    const pollAlerts = () => {
+    const monitorAlerts = async () => {
         try {
-            pikudHaoref.getActiveAlert((err, alert) => {
-                if (err) {
-                    console.error('שגיאה בקריאת התראות:', err);
-                    return;
-                }
-                
-                // בדיקה אם יש התראה חדשה
-                const alertId = alert ? JSON.stringify(alert) : 'no-alert';
-                const lastAlertId = lastAlert ? JSON.stringify(lastAlert) : 'no-last-alert';
-                
-                if (alertId !== lastAlertId) {
-                    console.log('התראה חדשה:', alert);
-                    
-                    const categorized = categorizeAlert(alert);
-                    const enrichedAlert = {
-                        ...alert,
-                        ...categorized,
-                        timestamp: new Date().toISOString(),
-                        hebrewTime: new Date().toLocaleString('he-IL', {
-                            timeZone: 'Asia/Jerusalem'
-                        })
-                    };
-                    
-                    lastAlert = enrichedAlert;
-                    saveToHistory(enrichedAlert);
-                    notifyRelevantUsers(enrichedAlert);
-                    
-                    // שלח לכל המחוברים עדכון כללי
-                    io.emit('global-status', {
-                        hasActiveAlert: alert.type !== 'none',
-                        affectedAreas: alert.cities || [],
-                        lastUpdate: enrichedAlert.timestamp
-                    });
-                }
-            });
+            const result = await checkKoreAPI();
+            
+            if (result === null) {
+                // שגיאה - נסה שוב תוך זמן קצר יותר
+                setTimeout(monitorAlerts, 5000);
+                return;
+            }
+            
+            isLiveMode = true;
+            
         } catch (error) {
-            console.error('שגיאה כללית במעקב התראות:', error);
+            console.error('❌ שגיאה כללית במעקב:', error.message);
         }
     };
     
-    // התחל מעקב מיידי
-    pollAlerts();
+    // בדיקה ראשונית
+    monitorAlerts();
     
-    // המשך מעקב כל 3 שניות
-    setInterval(pollAlerts, 3000);
+    // המשך מעקב כל 2 שניות (כמו בדוגמה)
+    setInterval(monitorAlerts, 2000);
+    
+    console.log('⏰ מעקב כל 2 שניות באמצעות API של כל רגע');
 }
 
 // טעינת היסטוריה קיימת
@@ -280,17 +423,44 @@ function loadExistingHistory() {
         if (fs.existsSync('alert_history.json')) {
             const data = fs.readFileSync('alert_history.json', 'utf8');
             alertHistory = JSON.parse(data);
-            console.log(`נטענו ${alertHistory.length} רשומות היסטוריה`);
+            console.log(`📚 נטענו ${alertHistory.length} רשומות היסטוריה`);
+        } else {
+            const initialAlert = {
+                id: Date.now(),
+                type: 'safe',
+                title: 'מערכת התראות פעילה',
+                icon: '✅',
+                description: 'המערכת עלתה בהצלחה ומחוברת ל-API של כל רגע',
+                cities: [],
+                timestamp: new Date().toISOString(),
+                hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
+                source: 'system'
+            };
+            
+            alertHistory = [initialAlert];
+            saveToHistory(initialAlert);
         }
     } catch (error) {
-        console.error('שגיאה בטעינת היסטוריה:', error);
+        console.error('❌ שגיאה בטעינת היסטוריה:', error.message);
         alertHistory = [];
     }
 }
 
-// Route לדף הבית
+// Routes
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        uptime: process.uptime(),
+        mode: isLiveMode ? 'live' : 'offline',
+        users: connectedUsers.size,
+        alerts: alertHistory.length,
+        timestamp: new Date().toISOString(),
+        api: 'kore.co.il'
+    });
 });
 
 // הפעלת השרת
@@ -298,17 +468,18 @@ function startServer() {
     loadExistingHistory();
     
     server.listen(PORT, () => {
-        console.log(`🚀 שרת מערכת התראות פועל על פורט ${PORT}`);
-        console.log(`📡 ממשק ווב זמין בכתובת: http://localhost:${PORT}`);
-        console.log(`👥 ${connectedUsers.size} משתמשים מחוברים`);
+        console.log('🎉================================🎉');
+        console.log(`🚀 מערכת התראות אמיתיות פועלת!`);
+        console.log(`📡 פורט: ${PORT}`);
+        console.log(`🌐 כתובת: ${process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + PORT}`);
+        console.log(`🔗 API: kore.co.il (אמיתי)`);
+        console.log(`👥 משתמשים: ${connectedUsers.size}`);
+        console.log(`📚 היסטוריה: ${alertHistory.length} רשומות`);
+        console.log('🎉================================🎉');
         
-        // התחל מעקב אחר התראות
         startAlertMonitoring();
     });
 }
-
-// הפעלה
-startServer();
 
 // טיפול בסגירה נקיה
 process.on('SIGINT', () => {
@@ -318,5 +489,15 @@ process.on('SIGINT', () => {
         process.exit(0);
     });
 });
+
+process.on('SIGTERM', () => {
+    console.log('🛑 קיבל SIGTERM, סוגר שרת...');
+    server.close(() => {
+        console.log('✅ שרת נסגר בהצלחה');
+        process.exit(0);
+    });
+});
+
+startServer();
 
 module.exports = app;
