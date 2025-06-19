@@ -621,17 +621,7 @@
         </div>
     </div>
 
-    <!-- Audio Elements -->
-    <audio id="preAlertSound" preload="auto">
-        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
-    </audio>
-    <audio id="enterSound" preload="auto">
-        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
-    </audio>
-    <audio id="exitSound" preload="auto">
-        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
-    </audio>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script>
         // Global variables
         let socket;
@@ -659,10 +649,9 @@
         const refreshBtn = document.getElementById('refreshBtn');
         const historyLoading = document.getElementById('historyLoading');
 
-        // Audio elements
-        const preAlertSound = document.getElementById('preAlertSound');
-        const enterSound = document.getElementById('enterSound');
-        const exitSound = document.getElementById('exitSound');
+        // Audio context for generating sounds programmatically
+        let audioContext = null;
+        let gainNode = null;
 
         // City data for shelter times (fallback)
         const cityDataFallback = {
@@ -702,14 +691,69 @@
 
         function initializeAudio() {
             volumeControl.value = currentVolume;
-            updateAudioVolume();
             muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
             muteButton.classList.toggle('muted', isMuted);
             
-            [preAlertSound, enterSound, exitSound].forEach(audio => {
-                audio.muted = isMuted;
-                audio.volume = currentVolume;
-            });
+            // Initialize Web Audio API
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                gainNode = audioContext.createGain();
+                gainNode.connect(audioContext.destination);
+                updateAudioVolume();
+            } catch (error) {
+                console.warn('Web Audio API not supported:', error);
+            }
+        }
+
+        function generateAlertSound(type) {
+            if (!audioContext || isMuted) return;
+
+            try {
+                // Resume audio context if suspended
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+
+                const oscillator = audioContext.createOscillator();
+                const envelope = audioContext.createGain();
+                
+                oscillator.connect(envelope);
+                envelope.connect(gainNode);
+
+                // Different sounds for different alert types
+                switch (type) {
+                    case 'shelter':
+                        // Urgent siren-like sound
+                        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                        oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.5);
+                        oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 1);
+                        break;
+                    case 'early-warning':
+                        // Warning beep
+                        oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+                        break;
+                    case 'all-clear':
+                        // Pleasant tone
+                        oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+                        oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.5);
+                        break;
+                    default:
+                        oscillator.frequency.setValueAtTime(500, audioContext.currentTime);
+                }
+
+                oscillator.type = 'sine';
+                
+                // Envelope
+                envelope.gain.setValueAtTime(0, audioContext.currentTime);
+                envelope.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
+                envelope.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 1);
+                
+            } catch (error) {
+                console.warn('Error generating alert sound:', error);
+            }
         }
 
         function initializeSocket() {
@@ -881,9 +925,9 @@
         }
 
         function updateAudioVolume() {
-            [preAlertSound, enterSound, exitSound].forEach(audio => {
-                audio.volume = currentVolume;
-            });
+            if (gainNode) {
+                gainNode.gain.setValueAtTime(currentVolume, audioContext.currentTime);
+            }
         }
 
         function toggleMute() {
@@ -892,10 +936,6 @@
             
             muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
             muteButton.classList.toggle('muted', isMuted);
-            
-            [preAlertSound, enterSound, exitSound].forEach(audio => {
-                audio.muted = isMuted;
-            });
         }
 
         function handleAlertUpdate(alert) {
@@ -976,26 +1016,7 @@
 
         function playAlertSound(alertType) {
             if (isMuted) return;
-
-            let audioToPlay;
-            switch (alertType) {
-                case 'early-warning':
-                    audioToPlay = preAlertSound;
-                    break;
-                case 'shelter':
-                    audioToPlay = enterSound;
-                    break;
-                case 'all-clear':
-                    audioToPlay = exitSound;
-                    break;
-                default:
-                    return;
-            }
-
-            audioToPlay.currentTime = 0;
-            audioToPlay.play().catch(e => {
-                console.warn('Cannot play audio:', e);
-            });
+            generateAlertSound(alertType);
         }
 
         function refreshHistory() {
@@ -1069,7 +1090,6 @@
 
         function updateConnectionStatus(connected, message = '') {
             const indicator = connectionStatus;
-            const pulseDot = indicator.querySelector('.pulse-dot');
             
             indicator.classList.toggle('disconnected', !connected);
             
