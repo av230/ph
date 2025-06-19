@@ -1,1024 +1,3 @@
-// // server.js - מערכת התראות חכמה עם רישום ו-SMS
-// const express = require('express');
-// const cors = require('cors');
-// const http = require('http');
-// const socketIo = require('socket.io');
-// const path = require('path');
-// const fs = require('fs');
-// const axios = require('axios');
-// const helmet = require('helmet');
-// const compression = require('compression');
-// const { createClient } = require('@supabase/supabase-js');
-
-// const app = express();
-// const server = http.createServer(app);
-// const io = socketIo(server, {
-//     cors: {
-//         origin: "*",
-//         methods: ["GET", "POST"]
-//     }
-// });
-
-// const PORT = process.env.PORT || 3000;
-
-// // Supabase Configuration
-// const SUPABASE_URL = process.env.SUPABASE_URL || 'YOUR_SUPABASE_URL';
-// const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
-// const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// // ימות המשיח API Configuration
-// const YEMOT_API_URL = 'https://www.call2all.co.il/ym/api/SendSMS';
-// const YEMOT_USERNAME = process.env.YEMOT_USERNAME || 'YOUR_YEMOT_USERNAME';
-// const YEMOT_PASSWORD = process.env.YEMOT_PASSWORD || 'YOUR_YEMOT_PASSWORD';
-
-// // הודעות SMS מוגדרות מראש
-// const SMS_MESSAGES = {
-//     'early-warning': {
-//         text: '⚠️ התראה מוקדמת באזור {city}! הכינו מרחב מוגן ותהיו מוכנים להיכנס אליו מיידית.',
-//         priority: 'medium'
-//     },
-//     'shelter': {
-//         text: '🚨 אזעקה ב{city}! , הכל יהיה טוב בעזרתו יתברך היכנסו לחדר המוגן מיידית ותישארו שם עד הודעה נוספת!',
-//         priority: 'high'
-//     },
-//     'all-clear': {
-//         text: "🟢 ברוך ה' הסכנה חלפה ב-  {city}. ניתן לצאת מהחדר המוגן ולחזור לפעילות רגילה.",
-//         priority: 'low'
-//     },
-//     'drill': {
-//         text: '🎯 תרגיל פיקוד העורף ב{city}. התנהגו כמו במצב חירום אמיתי.',
-//         priority: 'medium'
-//     }
-// };
-
-// // נתוני ערים
-// const cityData = {
-//     'בני ברק': { zone: 'דן', shelterTime: 90, area: 164 },
-//     'תל אביב': { zone: 'דן', shelterTime: 90, area: 102 },
-//     'ירושלים': { zone: 'ירושלים', shelterTime: 90, area: 201 },
-//     'חיפה': { zone: 'חיפה והכרמל', shelterTime: 60, area: 394 },
-//     'אשדוד': { zone: 'אשקלון והסביבה', shelterTime: 30, area: 1031 },
-//     'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30, area: 1035 },
-//     'באר שבע': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1200 },
-//     'נתניה': { zone: 'שרון', shelterTime: 45, area: 1081 },
-//     'חולון': { zone: 'דן', shelterTime: 90, area: 107 },
-//     'רמת גן': { zone: 'דן', shelterTime: 90, area: 106 },
-//     'פתח תקווה': { zone: 'דן', shelterTime: 90, area: 109 },
-//     'ראשון לציון': { zone: 'דן', shelterTime: 90, area: 104 },
-//     'רעננה': { zone: 'שרון', shelterTime: 90, area: 1082 },
-//     'כפר סבא': { zone: 'שרון', shelterTime: 90, area: 1084 },
-//     'עפולה': { zone: 'עמק יזרעאל', shelterTime: 60, area: 77 },
-//     'נצרת': { zone: 'עמק יזרעאל', shelterTime: 60, area: 78 },
-//     'טבריה': { zone: 'כינרת', shelterTime: 60, area: 79 },
-//     'צפת': { zone: 'גליל עליון', shelterTime: 60, area: 133 },
-//     'אילת': { zone: 'אילת', shelterTime: 180, area: 88 },
-//     'מודיעין': { zone: 'מודיעין', shelterTime: 90, area: 1166 },
-//     'כרמיאל': { zone: 'גליל מערבי', shelterTime: 60, area: 134 },
-//     'מעלות': { zone: 'גליל מערבי', shelterTime: 60, area: 135 },
-//     'נהריה': { zone: 'גליל מערבי', shelterTime: 60, area: 136 },
-//     'עכו': { zone: 'גליל מערבי', shelterTime: 60, area: 137 },
-//     'קרית שמונה': { zone: 'גליל עליון', shelterTime: 30, area: 138 },
-//     'מטולה': { zone: 'גליל עליון', shelterTime: 15, area: 139 },
-//     'קצרין': { zone: 'גולן', shelterTime: 60, area: 140 },
-//     'אריאל': { zone: 'שומרון', shelterTime: 90, area: 141 },
-//     'מעלה אדומים': { zone: 'ירושלים', shelterTime: 90, area: 142 },
-//     'בית שמש': { zone: 'ירושלים', shelterTime: 90, area: 143 }
-// };
-
-// // משתנים גלובליים
-// let alertHistory = [];
-// let lastAlert = null;
-// let lastAlertId = null;
-// let connectedUsers = new Map();
-// let isLiveMode = true;
-
-// // Cache ו-Health Monitoring
-// const alertCache = new Map();
-// const CACHE_DURATION = 30000;
-// let apiHealthStatus = {
-//     kore: { lastSuccess: null, failures: 0 },
-//     oref: { lastSuccess: null, failures: 0 },
-//     sms: { lastSuccess: null, failures: 0, sent: 0 }
-// };
-
-// // Middleware
-// app.use(helmet());
-// app.use(compression());
-// app.use(cors());
-// app.use(express.json());
-// app.use(express.static('public'));
-
-// // Middleware לוגים
-// function formatLogMessage(level, source, message, data = null) {
-//     const timestamp = new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
-//     const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌', debug: '🔍' };
-    
-//     let logMsg = `${icons[level] || '📝'} [${timestamp}] ${source}: ${message}`;
-//     if (data) logMsg += ` | ${JSON.stringify(data)}`;
-    
-//     console.log(logMsg);
-// }
-
-// // פונקציות Supabase
-// async function addPhoneRegistration(phone, city) {
-//     try {
-//         // בדיקה אם המספר כבר קיים
-//         const { data: existing, error: checkError } = await supabase
-//             .from('phone')
-//             .select('*')
-//             .eq('phone', phone)
-//             .single();
-
-//         if (existing) {
-//             // עדכון עיר קיימת
-//             const { data, error } = await supabase
-//                 .from('phone')
-//                 .update({ city: city, updated_at: new Date() })
-//                 .eq('phone', phone)
-//                 .select();
-
-//             if (error) throw error;
-//             formatLogMessage('success', 'Database', `עודכן מספר קיים: ${phone} -> ${city}`);
-//             return { success: true, action: 'updated', data };
-//         } else {
-//             // הוספת מספר חדש
-//             const { data, error } = await supabase
-//                 .from('phone')
-//                 .insert([{ phone: phone, city: city }])
-//                 .select();
-
-//             if (error) throw error;
-//             formatLogMessage('success', 'Database', `נוסף מספר חדש: ${phone} -> ${city}`);
-//             return { success: true, action: 'added', data };
-//         }
-//     } catch (error) {
-//         formatLogMessage('error', 'Database', 'שגיאה ברישום מספר', error.message);
-//         return { success: false, error: error.message };
-//     }
-// }
-
-// async function getPhonesByCity(city) {
-//     try {
-//         const { data, error } = await supabase
-//             .from('phone')
-//             .select('phone')
-//             .eq('city', city);
-
-//         if (error) throw error;
-//         return data.map(row => row.phone);
-//     } catch (error) {
-//         formatLogMessage('error', 'Database', `שגיאה בקריאת מספרים לעיר ${city}`, error.message);
-//         return [];
-//     }
-// }
-
-// async function getAllPhones() {
-//     try {
-//         const { data, error } = await supabase
-//             .from('phone')
-//             .select('*');
-
-//         if (error) throw error;
-//         return data;
-//     } catch (error) {
-//         formatLogMessage('error', 'Database', 'שגיאה בקריאת כל המספרים', error.message);
-//         return [];
-//     }
-// }
-
-// async function removePhoneRegistration(phone) {
-//     try {
-//         const { data, error } = await supabase
-//             .from('phone')
-//             .delete()
-//             .eq('phone', phone)
-//             .select();
-
-//         if (error) throw error;
-//         formatLogMessage('success', 'Database', `מספר הוסר: ${phone}`);
-//         return { success: true, data };
-//     } catch (error) {
-//         formatLogMessage('error', 'Database', 'שגיאה בהסרת מספר', error.message);
-//         return { success: false, error: error.message };
-//     }
-// }
-
-// // פונקציות SMS
-// function validatePhoneNumber(phone) {
-//     // ולידציה למספר ישראלי
-//     const cleanPhone = phone.replace(/[^\d]/g, '');
-    
-//     // מספר ישראלי: 05xxxxxxxx או 972xxxxxxxxx
-//     if (cleanPhone.match(/^05\d{8}$/)) {
-//         return '972' + cleanPhone.substring(1); // המרה לפורמט בינלאומי
-//     } else if (cleanPhone.match(/^972\d{9}$/)) {
-//         return cleanPhone;
-//     } else if (cleanPhone.match(/^0\d{8,9}$/)) {
-//         return '972' + cleanPhone.substring(1);
-//     }
-    
-//     return null;
-// }
-
-// async function sendSMS(phone, message, priority = 'medium') {
-//     try {
-//         const validPhone = validatePhoneNumber(phone);
-//         if (!validPhone) {
-//             throw new Error('מספר טלפון לא תקין');
-//         }
-
-//         const smsData = {
-//             username: YEMOT_USERNAME,
-//             password: YEMOT_PASSWORD,
-//             recipient: validPhone,
-//             sender: 'AlertSys', // שם השולח (עד 11 תווים)
-//             message: message,
-//             priority: priority === 'high' ? '1' : priority === 'medium' ? '2' : '3'
-//         };
-
-//         const response = await axios.post(YEMOT_API_URL, smsData, {
-//             timeout: 10000,
-//             headers: {
-//                 'Content-Type': 'application/x-www-form-urlencoded'
-//             }
-//         });
-
-//         if (response.data && response.data.success) {
-//             apiHealthStatus.sms.lastSuccess = Date.now();
-//             apiHealthStatus.sms.sent++;
-//             formatLogMessage('success', 'SMS', `נשלח ל-${validPhone}: ${message.substring(0, 50)}...`);
-//             return { success: true, messageId: response.data.messageId };
-//         } else {
-//             throw new Error(response.data.message || 'שגיאה לא מוגדרת');
-//         }
-        
-//     } catch (error) {
-//         apiHealthStatus.sms.failures++;
-//         formatLogMessage('error', 'SMS', `שגיאה בשליחה ל-${phone}`, error.message);
-//         return { success: false, error: error.message };
-//     }
-// }
-
-// async function sendAlertSMS(alertType, cities) {
-//     try {
-//         if (!cities || cities.length === 0) return;
-        
-//         const smsTemplate = SMS_MESSAGES[alertType];
-//         if (!smsTemplate) {
-//             formatLogMessage('warning', 'SMS', `לא נמצא תבנית SMS לסוג התראה: ${alertType}`);
-//             return;
-//         }
-
-//         let totalSent = 0;
-//         let totalFailed = 0;
-
-//         for (const city of cities) {
-//             const phones = await getPhonesByCity(city);
-//             const message = smsTemplate.text.replace('{city}', city);
-            
-//             formatLogMessage('info', 'SMS', `שולח התראות ל-${phones.length} מספרים בעיר ${city}`);
-
-//             for (const phone of phones) {
-//                 const result = await sendSMS(phone, message, smsTemplate.priority);
-//                 if (result.success) {
-//                     totalSent++;
-//                 } else {
-//                     totalFailed++;
-//                 }
-                
-//                 // המתנה קצרה בין שליחות למניעת עומס
-//                 await new Promise(resolve => setTimeout(resolve, 100));
-//             }
-//         }
-
-//         formatLogMessage('success', 'SMS', `סיכום שליחת התראות: ${totalSent} נשלחו, ${totalFailed} נכשלו`);
-        
-//         // שליחת עדכון ל-WebSocket
-//         io.emit('sms-status', {
-//             sent: totalSent,
-//             failed: totalFailed,
-//             cities: cities,
-//             alertType: alertType
-//         });
-
-//     } catch (error) {
-//         formatLogMessage('error', 'SMS', 'שגיאה כללית בשליחת התראות', error.message);
-//     }
-// }
-
-// // API Routes
-// app.get('/api/cities', (req, res) => {
-//     res.json(Object.keys(cityData).sort());
-// });
-
-// app.get('/api/city/:name', (req, res) => {
-//     const cityName = decodeURIComponent(req.params.name);
-//     const city = cityData[cityName];
-//     if (city) {
-//         res.json({ name: cityName, ...city });
-//     } else {
-//         res.status(404).json({ error: 'עיר לא נמצאה' });
-//     }
-// });
-
-// // API לרישום מספר טלפון
-// app.post('/api/register-phone', async (req, res) => {
-//     try {
-//         const { phone, city } = req.body;
-        
-//         if (!phone || !city) {
-//             return res.status(400).json({ 
-//                 success: false, 
-//                 error: 'חסרים פרטים: מספר טלפון ועיר' 
-//             });
-//         }
-
-//         const validPhone = validatePhoneNumber(phone);
-//         if (!validPhone) {
-//             return res.status(400).json({ 
-//                 success: false, 
-//                 error: 'מספר טלפון לא תקין. הכנס מספר ישראלי (05xxxxxxxx)' 
-//             });
-//         }
-
-//         if (!cityData[city]) {
-//             return res.status(400).json({ 
-//                 success: false, 
-//                 error: 'עיר לא מוכרת במערכת' 
-//             });
-//         }
-
-//         const result = await addPhoneRegistration(validPhone, city);
-        
-//         if (result.success) {
-//             // שליחת SMS אישור
-//             const confirmMessage = `ברוך הבא למערכת התראות פיקוד העורף! נרשמת בהצלחה לקבלת התראות עבור ${city}. להסרה השב STOP`;
-//             await sendSMS(validPhone, confirmMessage, 'low');
-            
-//             res.json({
-//                 success: true,
-//                 message: `נרשמת בהצלחה לקבלת התראות עבור ${city}`,
-//                 action: result.action,
-//                 phone: validPhone
-//             });
-//         } else {
-//             res.status(500).json(result);
-//         }
-        
-//     } catch (error) {
-//         formatLogMessage('error', 'API', 'שגיאה ברישום מספר', error.message);
-//         res.status(500).json({ 
-//             success: false, 
-//             error: 'שגיאה פנימית בשרת' 
-//         });
-//     }
-// });
-
-// // API להסרת מספר טלפון
-// app.post('/api/unregister-phone', async (req, res) => {
-//     try {
-//         const { phone } = req.body;
-        
-//         if (!phone) {
-//             return res.status(400).json({ 
-//                 success: false, 
-//                 error: 'חסר מספר טלפון' 
-//             });
-//         }
-
-//         const validPhone = validatePhoneNumber(phone);
-//         if (!validPhone) {
-//             return res.status(400).json({ 
-//                 success: false, 
-//                 error: 'מספר טלפון לא תקין' 
-//             });
-//         }
-
-//         const result = await removePhoneRegistration(validPhone);
-        
-//         if (result.success) {
-//             // שליחת SMS אישור הסרה
-//             const confirmMessage = 'הוסרת בהצלחה ממערכת התראות פיקוד העורף. תודה שהשתמשת בשירות שלנו!';
-//             await sendSMS(validPhone, confirmMessage, 'low');
-            
-//             res.json({
-//                 success: true,
-//                 message: 'המספר הוסר בהצלחה ממערכת ההתראות'
-//             });
-//         } else {
-//             res.status(500).json(result);
-//         }
-        
-//     } catch (error) {
-//         formatLogMessage('error', 'API', 'שגיאה בהסרת מספר', error.message);
-//         res.status(500).json({ 
-//             success: false, 
-//             error: 'שגיאה פנימית בשרת' 
-//         });
-//     }
-// });
-
-// // API לסטטיסטיקות
-// app.get('/api/stats', async (req, res) => {
-//     try {
-//         const allPhones = await getAllPhones();
-//         const phonesByCity = {};
-        
-//         allPhones.forEach(registration => {
-//             phonesByCity[registration.city] = (phonesByCity[registration.city] || 0) + 1;
-//         });
-
-//         res.json({
-//             total_registered: allPhones.length,
-//             by_city: phonesByCity,
-//             sms_stats: {
-//                 total_sent: apiHealthStatus.sms.sent,
-//                 total_failed: apiHealthStatus.sms.failures,
-//                 last_success: apiHealthStatus.sms.lastSuccess
-//             },
-//             server_stats: {
-//                 uptime: process.uptime(),
-//                 connected_users: connectedUsers.size,
-//                 alerts_count: alertHistory.length
-//             }
-//         });
-//     } catch (error) {
-//         formatLogMessage('error', 'API', 'שגיאה בקריאת סטטיסטיקות', error.message);
-//         res.status(500).json({ error: 'שגיאה בקריאת נתונים' });
-//     }
-// });
-
-// app.get('/api/alerts/current', (req, res) => {
-//     res.json({ 
-//         alert: lastAlert,
-//         timestamp: new Date().toISOString(),
-//         mode: isLiveMode ? 'live' : 'simulation'
-//     });
-// });
-
-// app.get('/api/alerts/history/:city?', async (req, res) => {
-//     const city = req.params.city ? decodeURIComponent(req.params.city) : null;
-    
-//     if (city) {
-//         try {
-//             const response = await axios.get(
-//                 `https://alerts-history.oref.org.il/Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1&city_0=${encodeURIComponent(city)}`, 
-//                 { timeout: 10000 }
-//             );
-            
-//             const history = response.data.map(alert => ({
-//                 ...mapAlertTypeFromKore({ title: alert.message, desc: alert.message }),
-//                 time: alert.time,
-//                 cities: [city],
-//                 timestamp: new Date().toISOString(),
-//                 hebrewTime: alert.time
-//             }));
-            
-//             res.json(history.slice(0, 50));
-//         } catch (error) {
-//             formatLogMessage('error', 'History', `שגיאה בטעינת היסטוריה עבור ${city}`, error.message);
-//             res.status(500).json({ error: 'שגיאה בטעינת היסטוריה' });
-//         }
-//     } else {
-//         res.json(alertHistory.slice(0, 50));
-//     }
-// });
-
-// // WebSocket חיבורים
-// io.on('connection', (socket) => {
-//     formatLogMessage('info', 'WebSocket', `משתמש חדש התחבר: ${socket.id}`);
-    
-//     socket.emit('connection-status', {
-//         connected: true,
-//         mode: isLiveMode ? 'live' : 'simulation',
-//         serverTime: new Date().toISOString()
-//     });
-    
-//     socket.on('register-city', (cityName) => {
-//         formatLogMessage('info', 'Registration', `משתמש ${socket.id} נרשם לעיר: ${cityName}`);
-//         connectedUsers.set(socket.id, { 
-//             cityName, 
-//             connectedAt: new Date(),
-//             lastSeen: new Date()
-//         });
-        
-//         if (lastAlert) {
-//             socket.emit('alert-update', lastAlert);
-//         }
-        
-//         const cityHistory = alertHistory.filter(alert => 
-//             !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
-//         ).slice(0, 20);
-        
-//         socket.emit('history-update', cityHistory);
-//     });
-    
-//     socket.on('get-history', (cityName) => {
-//         const cityHistory = alertHistory.filter(alert => 
-//             !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
-//         ).slice(0, 20);
-        
-//         socket.emit('history-update', cityHistory);
-//     });
-    
-//     socket.on('disconnect', () => {
-//         formatLogMessage('info', 'WebSocket', `משתמש ${socket.id} התנתק`);
-//         connectedUsers.delete(socket.id);
-//     });
-// });
-// // המשך server.js - חלק 2
-
-// // מיפוי סוגי התראות (מהקוד המקורי)
-// function mapAlertTypeFromKore(koreAlert) {
-//     if (!koreAlert || !koreAlert.title) {
-//         return {
-//             type: 'safe',
-//             title: 'מצב רגיל',
-//             icon: '✅',
-//             description: 'אין התראות פעילות כרגע',
-//             severity: 'low',
-//             class: 'safe'
-//         };
-//     }
-    
-//     const title = koreAlert.title.toLowerCase();
-    
-//     if (title.includes('רקטות') || title.includes('טילים') || title.includes('ירי') || title.includes('אזעקה')) {
-//         return {
-//             type: 'shelter',
-//             title: 'היכנסו לממ"ד מיידית!',
-//             icon: '🚨',
-//             description: `${koreAlert.title} - ${koreAlert.desc || 'היכנסו לחדר המוגן עכשיו!'}`,
-//             severity: 'high',
-//             class: 'danger'
-//         };
-//     } else if (title.includes('התראה') || title.includes('חירום')) {
-//         return {
-//             type: 'early-warning',
-//             title: 'התראה מוקדמת',
-//             icon: '⚠️',
-//             description: `${koreAlert.title} - ${koreAlert.desc || 'היו מוכנים'}`,
-//             severity: 'medium',
-//             class: 'warning'
-//         };
-//     } else if (title.includes('תרגיל')) {
-//         return {
-//             type: 'drill',
-//             title: 'תרגיל',
-//             icon: '🎯',
-//             description: `${koreAlert.title} - ${koreAlert.desc || 'תרגיל בטחוני'}`,
-//             severity: 'medium',
-//             class: 'warning'
-//         };
-//     } else {
-//         return {
-//             type: 'all-clear',
-//             title: 'יציאה מהממ"ד',
-//             icon: '🟢',
-//             description: 'הסכנה חלפה - ניתן לצאת מהחדר המוגן',
-//             severity: 'low',
-//             class: 'safe'
-//         };
-//     }
-// }
-
-// // זיהוי ערים משופר
-// function getCityMatchesFromAlert(alertCities) {
-//     const matches = [];
-//     const alertCitiesLower = (alertCities || []).map(city => city.toLowerCase().trim());
-    
-//     Object.keys(cityData).forEach(ourCity => {
-//         const ourCityLower = ourCity.toLowerCase();
-        
-//         // בדיקה מדוייקת
-//         if (alertCitiesLower.includes(ourCityLower)) {
-//             matches.push(ourCity);
-//             return;
-//         }
-        
-//         // בדיקה חלקית
-//         for (const alertCity of alertCitiesLower) {
-//             if (alertCity.includes(ourCityLower) || ourCityLower.includes(alertCity)) {
-//                 matches.push(ourCity);
-//                 break;
-//             }
-//         }
-//     });
-    
-//     return [...new Set(matches)];
-// }
-
-// // פונקציות התראות
-// function notifyRelevantUsers(alert) {
-//     if (!alert.cities || alert.cities.length === 0) {
-//         io.emit('alert-update', alert);
-//         formatLogMessage('info', 'Notification', `שולח התראה כללית ל-${connectedUsers.size} משתמשים`);
-//         return;
-//     }
-    
-//     let notifiedCount = 0;
-//     connectedUsers.forEach((userData, socketId) => {
-//         if (alert.cities.includes(userData.cityName)) {
-//             const socket = io.sockets.sockets.get(socketId);
-//             if (socket) {
-//                 socket.emit('alert-update', alert);
-//                 notifiedCount++;
-//             }
-//         }
-//     });
-    
-//     formatLogMessage('info', 'Notification', `שולח התראה ל-${notifiedCount} משתמשים בערים: ${alert.cities.join(', ')}`);
-// }
-
-// function saveToHistory(alert) {
-//     const historyEntry = {
-//         ...alert,
-//         id: Date.now() + Math.random(),
-//         timestamp: new Date().toISOString(),
-//         hebrewTime: new Date().toLocaleString('he-IL', {
-//             timeZone: 'Asia/Jerusalem',
-//             year: 'numeric',
-//             month: '2-digit',
-//             day: '2-digit',
-//             hour: '2-digit',
-//             minute: '2-digit',
-//             second: '2-digit'
-//         })
-//     };
-    
-//     alertHistory.unshift(historyEntry);
-    
-//     if (alertHistory.length > 500) {
-//         alertHistory = alertHistory.slice(0, 500);
-//     }
-    
-//     try {
-//         fs.writeFileSync('alert_history.json', JSON.stringify(alertHistory, null, 2));
-//     } catch (error) {
-//         formatLogMessage('warning', 'Storage', 'לא ניתן לשמור היסטוריה', error.message);
-//     }
-// }
-
-// // בדיקת API עם Cache
-// async function checkKoreAPIWithCache() {
-//     const now = Date.now();
-//     const cached = alertCache.get('kore');
-    
-//     if (cached && (now - cached.timestamp) < CACHE_DURATION) {
-//         return cached.data;
-//     }
-    
-//     try {
-//         const result = await checkKoreAPI();
-//         alertCache.set('kore', { data: result, timestamp: now });
-//         return result;
-//     } catch (error) {
-//         if (cached) {
-//             formatLogMessage('warning', 'API', 'שגיאה ב-API, משתמש בנתונים ישנים');
-//             return cached.data;
-//         }
-//         throw error;
-//     }
-// }
-
-// // בדיקת API של כל רגע
-// async function checkKoreAPI() {
-//     try {
-//         const response = await axios.get('https://www.kore.co.il/redAlert.json', {
-//             timeout: 10000,
-//             headers: {
-//                 'User-Agent': 'AlertSystem/2.0',
-//                 'Accept': 'application/json'
-//             }
-//         });
-        
-//         const alertData = response.data;
-//         apiHealthStatus.kore.lastSuccess = Date.now();
-//         apiHealthStatus.kore.failures = 0;
-        
-//         if (alertData && alertData.id) {
-//             if (lastAlertId !== alertData.id) {
-//                 lastAlertId = alertData.id;
-                
-//                 const categorized = mapAlertTypeFromKore(alertData);
-//                 const matchedCities = getCityMatchesFromAlert(alertData.data || []);
-                
-//                 const enrichedAlert = {
-//                     ...alertData,
-//                     ...categorized,
-//                     cities: matchedCities.length > 0 ? matchedCities : alertData.data,
-//                     originalCities: alertData.data,
-//                     timestamp: new Date().toISOString(),
-//                     hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-//                     source: 'kore-api'
-//                 };
-                
-//                 formatLogMessage('success', 'KoreAPI', `התראה חדשה: ${enrichedAlert.type}`, {
-//                     cities: enrichedAlert.cities,
-//                     originalCities: enrichedAlert.originalCities
-//                 });
-                
-//                 lastAlert = enrichedAlert;
-//                 saveToHistory(enrichedAlert);
-//                 notifyRelevantUsers(enrichedAlert);
-                
-//                 // שליחת SMS להתראות חשובות
-//                 if (enrichedAlert.type === 'shelter' || enrichedAlert.type === 'early-warning' || enrichedAlert.type === 'all-clear') {
-//                     await sendAlertSMS(enrichedAlert.type, enrichedAlert.cities);
-//                 }
-                
-//                 io.emit('global-status', {
-//                     hasActiveAlert: true,
-//                     affectedAreas: enrichedAlert.cities || [],
-//                     lastUpdate: enrichedAlert.timestamp,
-//                     mode: 'live'
-//                 });
-//             }
-//             return true;
-            
-//         } else {
-//             if (lastAlert && lastAlert.type !== 'safe' && lastAlert.type !== 'all-clear') {
-//                 await createAllClearAlert();
-//             }
-//             return false;
-//         }
-        
-//     } catch (error) {
-//         apiHealthStatus.kore.failures++;
-//         formatLogMessage('error', 'KoreAPI', `כשל ${apiHealthStatus.kore.failures}`, error.message);
-//         throw error;
-//     }
-// }
-
-// // בדיקת API של פיקוד העורף
-// async function checkPikudHaOrefAPI() {
-//     try {
-//         const response = await axios.get('https://www.oref.org.il/WarningMessages/alerts.json', {
-//             timeout: 10000,
-//             headers: {
-//                 'User-Agent': 'AlertSystem/2.0',
-//                 'Accept': 'application/json'
-//             }
-//         });
-        
-//         const alertData = response.data;
-//         apiHealthStatus.oref.lastSuccess = Date.now();
-//         apiHealthStatus.oref.failures = 0;
-        
-//         if (alertData && alertData.data && alertData.data.length > 0) {
-//             const alert = alertData.data[0];
-//             if (lastAlertId !== alert.id) {
-//                 lastAlertId = alert.id;
-                
-//                 const categorized = mapAlertTypeFromKore({ title: alert.title, desc: alert.message });
-//                 const matchedCities = getCityMatchesFromAlert(alert.cities || []);
-                
-//                 const enrichedAlert = {
-//                     ...alert,
-//                     ...categorized,
-//                     cities: matchedCities.length > 0 ? matchedCities : alert.cities,
-//                     originalCities: alert.cities,
-//                     timestamp: new Date().toISOString(),
-//                     hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-//                     source: 'pikud-haoref'
-//                 };
-                
-//                 formatLogMessage('success', 'OrefAPI', `התראה חדשה: ${enrichedAlert.type}`, {
-//                     cities: enrichedAlert.cities
-//                 });
-                
-//                 lastAlert = enrichedAlert;
-//                 saveToHistory(enrichedAlert);
-//                 notifyRelevantUsers(enrichedAlert);
-                
-//                 // שליחת SMS
-//                 if (enrichedAlert.type === 'shelter' || enrichedAlert.type === 'early-warning' || enrichedAlert.type === 'all-clear') {
-//                     await sendAlertSMS(enrichedAlert.type, enrichedAlert.cities);
-//                 }
-                
-//                 io.emit('global-status', {
-//                     hasActiveAlert: true,
-//                     affectedAreas: enrichedAlert.cities || [],
-//                     lastUpdate: enrichedAlert.timestamp,
-//                     mode: 'live'
-//                 });
-//             }
-//             return true;
-            
-//         } else {
-//             if (lastAlert && lastAlert.type !== 'safe' && lastAlert.type !== 'all-clear') {
-//                 await createAllClearAlert();
-//             }
-//             return false;
-//         }
-        
-//     } catch (error) {
-//         apiHealthStatus.oref.failures++;
-//         formatLogMessage('error', 'OrefAPI', `כשל ${apiHealthStatus.oref.failures}`, error.message);
-//         throw error;
-//     }
-// }
-
-// // יצירת התראת יציאה מממ"ד
-// async function createAllClearAlert() {
-//     const allClearAlert = {
-//         type: 'all-clear',
-//         title: 'יציאה מהממ"ד',
-//         icon: '🟢',
-//         description: 'הסכנה חלפה - ניתן לצאת מהחדר המוגן',
-//         severity: 'low',
-//         class: 'safe',
-//         cities: lastAlert.cities || [],
-//         timestamp: new Date().toISOString(),
-//         hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-//         source: 'system'
-//     };
-    
-//     formatLogMessage('info', 'System', 'יוצר התראת יציאה מממ"ד');
-    
-//     lastAlert = allClearAlert;
-//     lastAlertId = null;
-//     saveToHistory(allClearAlert);
-//     notifyRelevantUsers(allClearAlert);
-    
-//     // שליחת SMS יציאה מממ"ד
-//     await sendAlertSMS('all-clear', allClearAlert.cities);
-    
-//     io.emit('global-status', {
-//         hasActiveAlert: false,
-//         affectedAreas: [],
-//         lastUpdate: allClearAlert.timestamp,
-//         mode: 'live'
-//     });
-// }
-
-// // מעקב אחר התראות
-// function startAlertMonitoring() {
-//     formatLogMessage('info', 'Monitor', 'מתחיל מעקב אחר התראות אמיתיות');
-    
-//     const monitorAlerts = async () => {
-//         try {
-//             let result = await checkKoreAPIWithCache();
-            
-//             if (result === null) {
-//                 formatLogMessage('warning', 'Monitor', 'ניסיון חוזר עם API של פיקוד העורף');
-//                 result = await checkPikudHaOrefAPI();
-//             }
-            
-//             if (result === null) {
-//                 formatLogMessage('error', 'Monitor', 'כל ה-APIs נכשלו, מנסה שוב בעוד 5 שניות');
-//                 setTimeout(monitorAlerts, 5000);
-//                 return;
-//             }
-            
-//             isLiveMode = true;
-            
-//         } catch (error) {
-//             formatLogMessage('error', 'Monitor', 'שגיאה כללית במעקב', error.message);
-//         }
-//     };
-    
-//     monitorAlerts();
-//     setInterval(monitorAlerts, 5000);
-//     formatLogMessage('info', 'Monitor', 'מעקב כל 5 שניות באמצעות APIs מרובים + SMS');
-// }
-
-// // Heartbeat למשתמשים
-// function setupHeartbeat() {
-//     setInterval(() => {
-//         io.emit('heartbeat', {
-//             timestamp: new Date().toISOString(),
-//             connectedUsers: connectedUsers.size,
-//             serverStatus: 'healthy',
-//             apiStatus: {
-//                 kore: apiHealthStatus.kore.failures < 3 ? 'healthy' : 'degraded',
-//                 oref: apiHealthStatus.oref.failures < 3 ? 'healthy' : 'degraded',
-//                 sms: apiHealthStatus.sms.failures < 5 ? 'healthy' : 'degraded'
-//             },
-//             smsStats: {
-//                 sent: apiHealthStatus.sms.sent,
-//                 failures: apiHealthStatus.sms.failures
-//             }
-//         });
-        
-//         // ניקוי cache ישן
-//         const now = Date.now();
-//         for (const [key, value] of alertCache.entries()) {
-//             if (now - value.timestamp > CACHE_DURATION * 2) {
-//                 alertCache.delete(key);
-//             }
-//         }
-        
-//     }, 30000);
-    
-//     formatLogMessage('info', 'Heartbeat', 'Heartbeat הופעל עם סטטיסטיקות SMS');
-// }
-
-// // טעינת היסטוריה קיימת
-// function loadExistingHistory() {
-//     try {
-//         if (fs.existsSync('alert_history.json')) {
-//             const data = fs.readFileSync('alert_history.json', 'utf8');
-//             alertHistory = JSON.parse(data);
-//             formatLogMessage('success', 'Storage', `נטענו ${alertHistory.length} רשומות היסטוריה`);
-//         } else {
-//             const initialAlert = {
-//                 id: Date.now(),
-//                 type: 'safe',
-//                 title: 'מערכת התראות + SMS פעילה',
-//                 icon: '✅',
-//                 description: 'המערכת עלתה בהצלחה עם תמיכה ב-SMS',
-//                 cities: [],
-//                 timestamp: new Date().toISOString(),
-//                 hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-//                 source: 'system'
-//             };
-            
-//             alertHistory = [initialAlert];
-//             saveToHistory(initialAlert);
-//         }
-//     } catch (error) {
-//         formatLogMessage('error', 'Storage', 'שגיאה בטעינת היסטוריה', error.message);
-//         alertHistory = [];
-//     }
-// }
-
-// // Routes
-// app.get('/', (req, res) => {
-//     res.sendFile(path.join(__dirname, 'public', 'index.html'));
-// });
-
-// app.get('/health', (req, res) => {
-//     res.json({
-//         status: 'healthy',
-//         uptime: process.uptime(),
-//         mode: isLiveMode ? 'live' : 'offline',
-//         users: connectedUsers.size,
-//         alerts: alertHistory.length,
-//         timestamp: new Date().toISOString(),
-//         apis: 'kore.co.il, pikud-haoref, yemot-hamashiach',
-//         version: '2.1.0-SMS'
-//     });
-// });
-
-// // הפעלת השרת
-// function startServer() {
-//     loadExistingHistory();
-    
-//     server.listen(PORT, () => {
-//         formatLogMessage('success', 'Server', '🎉 מערכת התראות + SMS פועלת! 🎉');
-//         formatLogMessage('info', 'Server', `📡 פורט: ${PORT}`);
-//         formatLogMessage('info', 'Server', `🌐 כתובת: ${process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + PORT}`);
-//         formatLogMessage('info', 'Server', `🔗 APIs: kore.co.il, pikud-haoref, yemot-hamashiach`);
-//         formatLogMessage('info', 'Server', `📱 SMS: Yemot Hamashiach Integration`);
-//         formatLogMessage('info', 'Server', `🗄️ Database: Supabase`);
-//         formatLogMessage('info', 'Server', `👥 משתמשים: ${connectedUsers.size}`);
-//         formatLogMessage('info', 'Server', `📚 היסטוריה: ${alertHistory.length} רשומות`);
-        
-//         startAlertMonitoring();
-//         setupHeartbeat();
-//     });
-// }
-
-// // טיפול בסגירה נקיה
-// process.on('SIGINT', () => {
-//     formatLogMessage('info', 'Process', '🛑 סוגר שרת');
-//     gracefulShutdown();
-// });
-
-// process.on('SIGTERM', () => {
-//     formatLogMessage('info', 'Process', '🛑 קיבל SIGTERM, סוגר שרת');
-//     gracefulShutdown();
-// });
-
-// function gracefulShutdown() {
-//     formatLogMessage('info', 'Shutdown', 'מתחיל סגירה חלקה');
-    
-//     io.emit('server-shutdown', {
-//         message: 'השרת עובר לתחזוקה, יחזור בקרוב',
-//         timestamp: new Date().toISOString()
-//     });
-    
-//     server.close((err) => {
-//         if (err) {
-//             formatLogMessage('error', 'Shutdown', 'שגיאה בסגירת השרת', err.message);
-//             process.exit(1);
-//         }
-        
-//         formatLogMessage('success', 'Shutdown', '✅ שרת נסגר בהצלחה');
-//         process.exit(0);
-//     });
-    
-//     setTimeout(() => {
-//         formatLogMessage('warning', 'Shutdown', '⏰ כפה סגירה אחרי timeout');
-//         process.exit(1);
-//     }, 10000);
-// }
-
-// startServer();
-
-// // module.exports = app;
-// module.exports = { app, server, formatLogMessage };
 
 // server.js - מערכת התראות חכמה עם תיקון CSP
 const express = require('express');
@@ -1041,43 +20,164 @@ const io = socketIo(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-
-// נתוני ערים מעודכנים
 const cityData = {
+    // אזור דן ומרכז
+    'אבן יהודה': { zone: 'שרון', shelterTime: 90, area: 1083 },
+    'אור עקיבא': { zone: 'חיפה והכרמל', shelterTime: 60, area: 395 },
+    'אור יהודה': { zone: 'דן', shelterTime: 90, area: 105 },
+    'אלעד': { zone: 'דן', shelterTime: 90, area: 108 },
     'בני ברק': { zone: 'דן', shelterTime: 90, area: 164 },
-    'תל אביב': { zone: 'דן', shelterTime: 90, area: 102 },
-    'ירושלים': { zone: 'ירושלים', shelterTime: 90, area: 201 },
-    'חיפה': { zone: 'חיפה והכרמל', shelterTime: 60, area: 394 },
-    'אשדוד': { zone: 'אשקלון והסביבה', shelterTime: 30, area: 1031 },
-    'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30, area: 1035 },
-    'באר שבע': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1200 },
-    'נתניה': { zone: 'שרון', shelterTime: 45, area: 1081 },
+    'בת ים': { zone: 'דן', shelterTime: 90, area: 103 },
+    'גבעתיים': { zone: 'דן', shelterTime: 90, area: 111 },
+    'גדרה': { zone: 'יהודה', shelterTime: 90, area: 1147 },
+    'הוד השרון': { zone: 'שרון', shelterTime: 90, area: 1086 },
+    'הרצליה': { zone: 'שרון', shelterTime: 90, area: 1088 },
     'חולון': { zone: 'דן', shelterTime: 90, area: 107 },
-    'רמת גן': { zone: 'דן', shelterTime: 90, area: 106 },
-    'פתח תקווה': { zone: 'דן', shelterTime: 90, area: 109 },
-    'ראשון לציון': { zone: 'דן', shelterTime: 90, area: 104 },
-    'רעננה': { zone: 'שרון', shelterTime: 90, area: 1082 },
+    'יבנה': { zone: 'יהודה', shelterTime: 90, area: 1148 },
+    'יהוד מונוסון': { zone: 'דן', shelterTime: 90, area: 110 },
     'כפר סבא': { zone: 'שרון', shelterTime: 90, area: 1084 },
-    'עפולה': { zone: 'עמק יזרעאל', shelterTime: 60, area: 77 },
-    'נצרת': { zone: 'עמק יזרעאל', shelterTime: 60, area: 78 },
-    'טבריה': { zone: 'כינרת', shelterTime: 60, area: 79 },
-    'צפת': { zone: 'גליל עליון', shelterTime: 60, area: 133 },
-    'אילת': { zone: 'אילת', shelterTime: 180, area: 88 },
-    'מודיעין': { zone: 'מודיעין', shelterTime: 90, area: 1166 },
-    'כרמיאל': { zone: 'גליל מערבי', shelterTime: 60, area: 134 },
-    'מעלות': { zone: 'גליל מערבי', shelterTime: 60, area: 135 },
+    'לוד': { zone: 'יהודה', shelterTime: 90, area: 1145 },
+    'מודיעין מכבים רעות': { zone: 'מודיעין', shelterTime: 90, area: 1166 },
+    'נס ציונה': { zone: 'יהודה', shelterTime: 90, area: 1149 },
+    'נתניה': { zone: 'שרון', shelterTime: 45, area: 1081 },
+    'פתח תקווה': { zone: 'דן', shelterTime: 90, area: 109 },
+    'צפרירים': { zone: 'יהודה', shelterTime: 90, area: 1152 },
+    'קרית אונו': { zone: 'דן', shelterTime: 90, area: 112 },
+    'ראש העין': { zone: 'שרון', shelterTime: 90, area: 1089 },
+    'ראשון לציון': { zone: 'דן', shelterTime: 90, area: 104 },
+    'רחובות': { zone: 'יהודה', shelterTime: 90, area: 1146 },
+    'רמלה': { zone: 'יהודה', shelterTime: 90, area: 1144 },
+    'רמת גן': { zone: 'דן', shelterTime: 90, area: 106 },
+    'רמת השרון': { zone: 'שרון', shelterTime: 90, area: 1087 },
+    'רעננה': { zone: 'שרון', shelterTime: 90, area: 1082 },
+    'תל אביב': { zone: 'דן', shelterTime: 90, area: 102 },
+
+    // ירושלים והסביבה
+    'ירושלים': { zone: 'ירושלים', shelterTime: 90, area: 201 },
+    'בית שמש': { zone: 'ירושלים', shelterTime: 90, area: 143 },
+    'מעלה אדומים': { zone: 'ירושלים', shelterTime: 90, area: 142 },
+    'מבשרת ציון': { zone: 'ירושלים', shelterTime: 90, area: 202 },
+    'אבו גוש': { zone: 'ירושלים', shelterTime: 90, area: 203 },
+
+    // חיפה והצפון
+    'חיפה': { zone: 'חיפה והכרמל', shelterTime: 60, area: 394 },
+    'קרית אתא': { zone: 'חיפה והכרמל', shelterTime: 60, area: 396 },
+    'קרית ביאליק': { zone: 'חיפה והכרמל', shelterTime: 60, area: 397 },
+    'קרית ים': { zone: 'חיפה והכרמל', shelterTime: 60, area: 398 },
+    'קרית מוצקין': { zone: 'חיפה והכרמל', shelterTime: 60, area: 399 },
     'נהריה': { zone: 'גליל מערבי', shelterTime: 60, area: 136 },
     'עכו': { zone: 'גליל מערבי', shelterTime: 60, area: 137 },
-    'קרית שמונה': { zone: 'גליל עליון', shelterTime: 30, area: 138 },
+    'כרמיאל': { zone: 'גליל מערבי', shelterTime: 60, area: 134 },
+    'מעלות תרשיחא': { zone: 'גליל מערבי', shelterTime: 60, area: 135 },
+    'שלומי': { zone: 'גליל מערבי', shelterTime: 30, area: 138 },
     'מטולה': { zone: 'גליל עליון', shelterTime: 15, area: 139 },
-    'קצרין': { zone: 'גולן', shelterTime: 60, area: 140 },
-    'אריאל': { zone: 'שומרון', shelterTime: 90, area: 141 },
-    'מעלה אדומים': { zone: 'ירושלים', shelterTime: 90, area: 142 },
-    'בית שמש': { zone: 'ירושלים', shelterTime: 90, area: 143 }
+    'קרית שמונה': { zone: 'גליל עליון', shelterTime: 30, area: 140 },
+    'צפת': { zone: 'גליל עליון', shelterTime: 60, area: 133 },
+    'חצור הגלילית': { zone: 'גליל עליון', shelterTime: 60, area: 141 },
+
+    // גולן
+    'קצרין': { zone: 'גולן', shelterTime: 60, area: 142 },
+    'מג"ב גולן': { zone: 'גולן', shelterTime: 30, area: 143 },
+
+    // עמק יזרעאל והגליל התחתון
+    'עפולה': { zone: 'עמק יזרעאל', shelterTime: 60, area: 77 },
+    'נצרת': { zone: 'עמק יזרעאל', shelterTime: 60, area: 78 },
+    'נצרת עילית': { zone: 'עמק יזרעאל', shelterTime: 60, area: 79 },
+    'טבריה': { zone: 'כינרת', shelterTime: 60, area: 80 },
+    'מגדל': { zone: 'כינרת', shelterTime: 60, area: 81 },
+    'יקנעם': { zone: 'עמק יזרעאל', shelterTime: 60, area: 82 },
+    'נוף הגליל': { zone: 'גליל תחתון', shelterTime: 60, area: 83 },
+
+    // אשקלון והדרום
+    'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30, area: 1035 },
+    'אשדוד': { zone: 'אשקלון והסביבה', shelterTime: 30, area: 1031 },
+    'קרית גת': { zone: 'אשקלון והסביבה', shelterTime: 45, area: 1036 },
+    'קרית מלאכי': { zone: 'אשקלון והסביבה', shelterTime: 45, area: 1037 },
+    'נתיבות': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1201 },
+    'אופקים': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1202 },
+    'שדרות': { zone: 'באר שבע והנגב', shelterTime: 15, area: 1203 },
+
+    // באר שבע והנגב
+    'באר שבע': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1200 },
+    'דימונה': { zone: 'באר שבע והנגב', shelterTime: 90, area: 1204 },
+    'ערד': { zone: 'באר שבע והנגב', shelterTime: 90, area: 1205 },
+    'מצפה רמון': { zone: 'באר שבע והנגב', shelterTime: 180, area: 1206 },
+    'יקנעם עילית': { zone: 'באר שבע והנגב', shelterTime: 120, area: 1207 },
+
+    // אילת והערבה
+    'אילת': { zone: 'אילת', shelterTime: 180, area: 88 },
+
+    // יהודה ושומרון (יישובים מעבר לקו הירוק)
+    'אריאל': { zone: 'שומרון', shelterTime: 90, area: 301 },
+    'מעלה אדומים': { zone: 'ירושלים', shelterTime: 90, area: 302 },
+    'בית אל': { zone: 'שומרון', shelterTime: 90, area: 303 },
+    'קרית ארבע': { zone: 'חברון', shelterTime: 90, area: 304 },
+    'עמנואל': { zone: 'שומרון', shelterTime: 90, area: 305 },
+    'אלקנה': { zone: 'שומרון', shelterTime: 90, area: 306 },
+    'קדומים': { zone: 'שומרון', shelterTime: 90, area: 307 },
+    'אפרת': { zone: 'גוש עציון', shelterTime: 90, area: 308 },
+    'בית שאן': { zone: 'בקעת הירדן', shelterTime: 60, area: 309 },
+
+    // רשויות אזוריות וערים קטנות נוספות
+    'גן יבנה': { zone: 'יהודה', shelterTime: 90, area: 1150 },
+    'גדרה': { zone: 'יהודה', shelterTime: 90, area: 1151 },
+    'קרית עקרון': { zone: 'יהודה', shelterTime: 90, area: 1153 },
+    'שוהם': { zone: 'יהודה', shelterTime: 90, area: 1154 },
+    'מזכרת בתיה': { zone: 'יהודה', shelterTime: 90, area: 1155 },
+
+    // ערים חדשות ויישובים גדולים
+    'חריש': { zone: 'שרון', shelterTime: 90, area: 1090 },
+    'בית שאן': { zone: 'בקעת הירדן', shelterTime: 60, area: 85 },
+    'מגדל העמק': { zone: 'עמק יזרעאל', shelterTime: 60, area: 86 },
+    'שמונה': { zone: 'גליל עליון', shelterTime: 30, area: 87 },
+
+    // רשויות אזוריות חשובות
+    'גוש עציון': { zone: 'גוש עציון', shelterTime: 90, area: 310 },
+    'מטה יהודה': { zone: 'ירושלים', shelterTime: 90, area: 204 },
+    'שפלת יהודה': { zone: 'יהודה', shelterTime: 90, area: 1156 },
+    'גזר': { zone: 'יהודה', shelterTime: 90, area: 1157 },
+    'חבל מודיעין': { zone: 'מודיעין', shelterTime: 90, area: 1167 },
+
+    // ערים ויישובים נוספים בפריפריה
+    'קליה': { zone: 'בקעת הירדן', shelterTime: 90, area: 311 },
+    'אלמוג': { zone: 'בקעת הירדן', shelterTime: 90, area: 312 },
+    'יריחו': { zone: 'בקעת הירדן', shelterTime: 90, area: 313 },
+
+    // ערים ויישובים בגליל
+    'סח'נין': { zone: 'גליל תחתון', shelterTime: 60, area: 84 },
+    'אכסאל': { zone: 'גליל תחתון', shelterTime: 60, area: 85 },
+    'ג'ולס': { zone: 'גליל עליון', shelterTime: 60, area: 144 },
+    'פקיעין': { zone: 'גליל עליון', shelterTime: 60, area: 145 },
+
+    // ערים ביהודה ושומרון
+    'רמאללה': { zone: 'שומרון', shelterTime: 90, area: 314 },
+    'חברון': { zone: 'חברון', shelterTime: 90, area: 315 },
+    'נבלוס': { zone: 'שומרון', shelterTime: 90, area: 316 },
+    'ג\'נין': { zone: 'שומרון', shelterTime: 90, area: 317 },
+    'טול כרם': { zone: 'שומרון', shelterTime: 90, area: 318 },
+    'קלקיליה': { zone: 'שומרון', shelterTime: 90, area: 319 },
+
+    // יישובים דרוזים וערבים
+    'דאלית אל כרמל': { zone: 'חיפה והכרמל', shelterTime: 60, area: 400 },
+    'עוספיא': { zone: 'חיפה והכרמל', shelterTime: 60, area: 401 },
+    'בוקעתא': { zone: 'גולן', shelterTime: 60, area: 146 },
+    'מג'דל שמס': { zone: 'גולן', shelterTime: 60, area: 147 },
+    'מסעדה': { zone: 'גולן', shelterTime: 60, area: 148 },
+    'עין קנייא': { zone: 'גולן', shelterTime: 60, area: 149 },
+
+    // יישובים בדואיים בנגב
+    'רהט': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1208 },
+    'ערערה בנגב': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1209 },
+    'לקיה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1210 },
+    'כסיפה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1211 },
+    'תל שבע': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1212 },
+    'חורה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1213 },
+    'שגב שלום': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1214 }
 };
 
-// מילון קיצורים וכינויים לערים
+// מילון קיצורים וכינויים מורחב
 const cityAliases = {
+    // קיצורים נפוצים
     'ת"א': 'תל אביב',
     'תא': 'תל אביב',
     'ירושלים': ['ירושלים', 'מעלה אדומים', 'בית שמש'],
@@ -1088,9 +188,55 @@ const cityAliases = {
     'פ"ת': 'פתח תקווה',
     'פת': 'פתח תקווה',
     'ר"ג': 'רמת גן',
-    'רג': 'רמת גן'
-};
+    'רג': 'רמת גן',
+    'רה"ש': 'רמת השרון',
+    'רהש': 'רמת השרון',
+    'ח"ה': 'חולון',
+    'חה': 'חולון',
+    'ב"ב': 'בני ברק',
+    'בב': 'בני ברק',
+    'ק"א': 'קרית אתא',
+    'קא': 'קרית אתא',
+    'ק"ב': 'קרית ביאליק',
+    'קב': 'קרית ביאליק',
+    'ק"י': 'קרית ים',
+    'קי': 'קרית ים',
+    'ק"מ': 'קרית מוצקין',
+    'קמ': 'קרית מוצקין',
+    'ק"ג': 'קרית גת',
+    'קג': 'קרית גת',
+    'ק"מל': 'קרית מלאכי',
+    'קמל': 'קרית מלאכי',
 
+    // כינויים נוספים
+    'יפו': 'תל אביב',
+    'שכונת יפו': 'תל אביב',
+    'נוה צדק': 'תל אביב',
+    'פלורנטין': 'תל אביב',
+    'נמל תל אביב': 'תל אביב',
+    
+    // כינויים לירושלים
+    'ירושלים המערבית': 'ירושלים',
+    'ירושלים המזרחית': 'ירושלים',
+    'העיר העתיקה': 'ירושלים',
+    'מרכז ירושלים': 'ירושלים',
+    
+    // כינויים לחיפה
+    'קרמל': 'חיפה',
+    'נמל חיפה': 'חיפה',
+    'הדר': 'חיפה',
+    'כרמל התחתון': 'חיפה',
+    'כרמל העליון': 'חיפה',
+
+    // כינויים נוספים
+    'עיר דוד': 'ירושלים',
+    'עיר הנמל': 'חיפה',
+    'עיר החול': 'תל אביב',
+    'הכרמל': 'חיפה',
+    'העמק': 'עפולה',
+    'הגליל העליון': 'צפת',
+    'הנגב': 'באר שבע'
+};
 // משתנים גלובליים
 let alertHistory = [];
 let lastAlert = null;
