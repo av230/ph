@@ -1462,7 +1462,7 @@ function mapAlertTypeFromKore(koreAlert) {
             type: 'all-clear',
             title: 'יציאה מהממ"ד',
             icon: '🟢',
-            description: 'הסכנה חלפה - ניתן לצאת מהחדר המוגן',
+            description: 'הסכנה חלפה  תודה לאל- ניתן לצאת מהחדר המוגן',
             severity: 'low',
             class: 'safe'
         };
@@ -1681,7 +1681,7 @@ function createAllClearAlert() {
         type: 'all-clear',
         title: 'יציאה מהממ"ד',
         icon: '🟢',
-        description: 'הסכנה חלפה - ניתן לצאת מהחדר המוגן',
+        description: 'הסכנה חלפה תודה לאל - ניתן לצאת מהחדר המוגן',
         severity: 'low',
         class: 'safe',
         cities: lastAlert.cities || [],
