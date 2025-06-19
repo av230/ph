@@ -524,6 +524,127 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
+        /* Credits Section Styles */
+        .credits-section {
+            background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+            color: white;
+            padding: 40px;
+            margin-top: 30px;
+            border-radius: 0 0 20px 20px;
+        }
+
+        .credits-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .credits-title h3 {
+            text-align: center;
+            font-size: 1.8em;
+            margin-bottom: 30px;
+            color: #f7fafc;
+        }
+
+        .credits-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .data-sources, .disclaimer, .developer-credit {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 25px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .data-sources h4, .disclaimer h4, .developer-credit h4 {
+            margin-bottom: 15px;
+            color: #90cdf4;
+            font-size: 1.2em;
+        }
+
+        .data-sources ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .data-sources li {
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .data-sources a {
+            color: #90cdf4;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .data-sources a:hover {
+            color: #63b3ed;
+            text-decoration: underline;
+        }
+
+        .disclaimer p {
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .disclaimer .important {
+            color: #fbb6ce;
+            font-weight: bold;
+        }
+
+        .developer-credit .subtitle {
+            color: #cbd5e0;
+            font-style: italic;
+            font-size: 0.9em;
+        }
+
+        .tech-stack {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tech-tag {
+            background: rgba(66, 153, 225, 0.3);
+            color: #90cdf4;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            border: 1px solid rgba(66, 153, 225, 0.4);
+        }
+
+        .emergency-note {
+            background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+            padding: 20px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 8px 25px rgba(229, 62, 62, 0.3);
+            animation: pulse-emergency 3s infinite;
+        }
+
+        @keyframes pulse-emergency {
+            0%, 100% { box-shadow: 0 8px 25px rgba(229, 62, 62, 0.3); }
+            50% { box-shadow: 0 12px 35px rgba(229, 62, 62, 0.5); }
+        }
+
+        .emergency-icon {
+            font-size: 2em;
+            animation: bounce 2s infinite;
+        }
+
+        .emergency-text {
+            line-height: 1.5;
+        }
+
         @media (max-width: 768px) {
             .main-content { padding: 20px; }
             .header h1 { font-size: 2.2em; }
@@ -531,6 +652,9 @@
             .audio-controls { flex-direction: column; gap: 15px; }
             .history-header { flex-direction: column; gap: 15px; align-items: stretch; }
             .status-indicators { position: relative; top: 0; left: 0; margin-bottom: 20px; }
+            .credits-content { grid-template-columns: 1fr; }
+            .credits-section { padding: 20px; }
+            .emergency-note { flex-direction: column; text-align: center; }
         }
     </style>
 </head>
@@ -619,6 +743,58 @@
                 </div>
             </div>
         </div>
+
+        <!-- Credit and Disclaimer Section -->
+        <div class="credits-section">
+            <div class="credits-container">
+                <div class="credits-title">
+                    <h3>🔗 מקורות המידע והאחריות</h3>
+                </div>
+                
+                <div class="credits-content">
+                    <div class="data-sources">
+                        <h4>📊 מקורות הנתונים:</h4>
+                        <ul>
+                            <li><strong>API כל רגע</strong> - <a href="https://www.kore.co.il" target="_blank" rel="noopener">kore.co.il</a></li>
+                            <li><strong>פיקוד העורף הישראלי</strong> - <a href="https://www.oref.org.il" target="_blank" rel="noopener">oref.org.il</a></li>
+                            <li><strong>מערכות התראות רשמיות</strong> של מדינת ישראל</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="disclaimer">
+                        <h4>⚠️ הסתייגות וכללי אחריות:</h4>
+                        <p>
+                            <strong>מערכת זו מפותחת כ"כלי עזר" בהתנדבות ולא מחליפה את המקורות הרשמיים.</strong><br>
+                            האחריות המלאה על שימוש במידע ופעולות בעת חירום חלה על המשתמש בלבד.<br>
+                            <span class="important">בעת התראה - פעלו לפי הנחיות הרשויות הרשמיות בלבד!</span>
+                        </p>
+                    </div>
+                    
+                    <div class="developer-credit">
+                        <h4>💻 פיתוח מערכת:</h4>
+                       <p>
+    נבנה לשימוש אישי על ידי <strong>AV-DIGITAL.CO.IL</strong><br>
+    <span class="subtitle">מערכות חכמות לעמותות</span><br>
+    בקוד פתוח עם השראה וידע מ-<a href="https://tchumim.com/" target="_blank" rel="noopener noreferrer">פורום תחומים</a>
+</p>
+                        
+                        <div class="tech-stack">
+                            <span class="tech-tag">Node.js</span>
+                            <span class="tech-tag">Socket.IO</span>
+                            <span class="tech-tag">Express</span>
+                            <span class="tech-tag">Web Audio API</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="emergency-note">
+                    <div class="emergency-icon">🚨</div>
+                    <div class="emergency-text">
+                        <strong>זכרו:</strong> בעת חירום אמיתי, פעלו לפי הנחיות פיקוד העורף הרשמי ושירותי החירום הלאומיים בלבד!
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
@@ -654,28 +830,119 @@
         let gainNode = null;
 
         // City data for shelter times (fallback)
-        const cityDataFallback = {
+     const cityDataFallback = {
+            // אזור דן ומרכז
+            'אבן יהודה': { zone: 'שרון', shelterTime: 90 },
+            'אור עקיבא': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'אור יהודה': { zone: 'דן', shelterTime: 90 },
+            'אלעד': { zone: 'דן', shelterTime: 90 },
             'בני ברק': { zone: 'דן', shelterTime: 90 },
-            'תל אביב': { zone: 'דן', shelterTime: 90 },
-            'ירושלים': { zone: 'ירושלים', shelterTime: 90 },
-            'חיפה': { zone: 'חיפה והכרמל', shelterTime: 60 },
-            'אשדוד': { zone: 'אשקלון והסביבה', shelterTime: 30 },
-            'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30 },
-            'באר שבע': { zone: 'באר שבע והנגב', shelterTime: 60 },
-            'נתניה': { zone: 'שרון', shelterTime: 45 },
+            'בת ים': { zone: 'דן', shelterTime: 90 },
+            'גבעתיים': { zone: 'דן', shelterTime: 90 },
+            'גדרה': { zone: 'יהודה', shelterTime: 90 },
+            'הוד השרון': { zone: 'שרון', shelterTime: 90 },
+            'הרצליה': { zone: 'שרון', shelterTime: 90 },
             'חולון': { zone: 'דן', shelterTime: 90 },
-            'רמת גן': { zone: 'דן', shelterTime: 90 },
-            'פתח תקווה': { zone: 'דן', shelterTime: 90 },
-            'ראשון לציון': { zone: 'דן', shelterTime: 90 },
-            'רעננה': { zone: 'שרון', shelterTime: 90 },
+            'יבנה': { zone: 'יהודה', shelterTime: 90 },
+            'יהוד מונוסון': { zone: 'דן', shelterTime: 90 },
             'כפר סבא': { zone: 'שרון', shelterTime: 90 },
+            'לוד': { zone: 'יהודה', shelterTime: 90 },
+            'מודיעין מכבים רעות': { zone: 'מודיעין', shelterTime: 90 },
+            'נס ציונה': { zone: 'יהודה', shelterTime: 90 },
+            'נתניה': { zone: 'שרון', shelterTime: 45 },
+            'פתח תקווה': { zone: 'דן', shelterTime: 90 },
+            'צפרירים': { zone: 'יהודה', shelterTime: 90 },
+            'קרית אונו': { zone: 'דן', shelterTime: 90 },
+            'ראש העין': { zone: 'שרון', shelterTime: 90 },
+            'ראשון לציון': { zone: 'דן', shelterTime: 90 },
+            'רחובות': { zone: 'יהודה', shelterTime: 90 },
+            'רמלה': { zone: 'יהודה', shelterTime: 90 },
+            'רמת גן': { zone: 'דן', shelterTime: 90 },
+            'רמת השרון': { zone: 'שרון', shelterTime: 90 },
+            'רעננה': { zone: 'שרון', shelterTime: 90 },
+            'תל אביב': { zone: 'דן', shelterTime: 90 },
+            'שוהם': { zone: 'יהודה', shelterTime: 90 },
+            'חריש': { zone: 'שרון', shelterTime: 90 },
+
+            // ירושלים והסביבה
+            'ירושלים': { zone: 'ירושלים', shelterTime: 90 },
+            'בית שמש': { zone: 'ירושלים', shelterTime: 90 },
+            'מעלה אדומים': { zone: 'ירושלים', shelterTime: 90 },
+            'מבשרת ציון': { zone: 'ירושלים', shelterTime: 90 },
+            'אבו גוש': { zone: 'ירושלים', shelterTime: 90 },
+
+            // חיפה והצפון
+            'חיפה': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'קרית אתא': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'קרית ביאליק': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'קרית ים': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'קרית מוצקין': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'נהריה': { zone: 'גליל מערבי', shelterTime: 60 },
+            'עכו': { zone: 'גליל מערבי', shelterTime: 60 },
+            'כרמיאל': { zone: 'גליל מערבי', shelterTime: 60 },
+            'מעלות תרשיחא': { zone: 'גליל מערבי', shelterTime: 60 },
+            'שלומי': { zone: 'גליל מערבי', shelterTime: 30 },
+            'מטולה': { zone: 'גליל עליון', shelterTime: 15 },
+            'קרית שמונה': { zone: 'גליל עליון', shelterTime: 30 },
+            'צפת': { zone: 'גליל עליון', shelterTime: 60 },
+            'חצור הגלילית': { zone: 'גליל עליון', shelterTime: 60 },
+
+            // גולן
+            'קצרין': { zone: 'גולן', shelterTime: 60 },
+            'מג"ב גולן': { zone: 'גולן', shelterTime: 30 },
+
+            // עמק יזרעאל והגליל התחתון
             'עפולה': { zone: 'עמק יזרעאל', shelterTime: 60 },
             'נצרת': { zone: 'עמק יזרעאל', shelterTime: 60 },
+            'נצרת עילית': { zone: 'עמק יזרעאל', shelterTime: 60 },
             'טבריה': { zone: 'כינרת', shelterTime: 60 },
-            'צפת': { zone: 'גליל עליון', shelterTime: 60 },
+            'מגדל': { zone: 'כינרת', shelterTime: 60 },
+            'יקנעם': { zone: 'עמק יזרעאל', shelterTime: 60 },
+            'נוף הגליל': { zone: 'גליל תחתון', shelterTime: 60 },
+            'בית שאן': { zone: 'בקעת הירדן', shelterTime: 60 },
+            'מגדל העמק': { zone: 'עמק יזרעאל', shelterTime: 60 },
+
+            // אשקלון והדרום
+            'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30 },
+            'אשדוד': { zone: 'אשקלון והסביבה', shelterTime: 30 },
+            'קרית גת': { zone: 'אשקלון והסביבה', shelterTime: 45 },
+            'קרית מלאכי': { zone: 'אשקלון והסביבה', shelterTime: 45 },
+            'נתיבות': { zone: 'באר שבע והנגב', shelterTime: 60 },
+            'אופקים': { zone: 'באר שבע והנגב', shelterTime: 60 },
+            'שדרות': { zone: 'באר שבע והנגב', shelterTime: 15 },
+
+            // באר שבע והנגב
+            'באר שבע': { zone: 'באר שבע והנגב', shelterTime: 60 },
+            'דימונה': { zone: 'באר שבע והנגב', shelterTime: 90 },
+            'ערד': { zone: 'באר שבע והנגב', shelterTime: 90 },
+            'מצפה רמון': { zone: 'באר שבע והנגב', shelterTime: 180 },
+            'רהט': { zone: 'באר שבע והנגב', shelterTime: 60 },
+            'ערערה בנגב': { zone: 'באר שבע והנגב', shelterTime: 60 },
+            'לקיה': { zone: 'באר שבע והנגב', shelterTime: 60 },
+
+            // אילת והערבה
             'אילת': { zone: 'אילת', shelterTime: 180 },
-            'מודיעין': { zone: 'מודיעין', shelterTime: 90 }
-        };
+
+            // יהודה ושומרון
+            'אריאל': { zone: 'שומרון', shelterTime: 90 },
+            'בית אל': { zone: 'שומרון', shelterTime: 90 },
+            'עמנואל': { zone: 'שומרון', shelterTime: 90 },
+            'אלקנה': { zone: 'שומרון', shelterTime: 90 },
+            'קדומים': { zone: 'שומרון', shelterTime: 90 },
+            'אפרת': { zone: 'גוש עציון', shelterTime: 90 },
+
+            // ערים ויישובים נוספים
+            'גן יבנה': { zone: 'יהודה', shelterTime: 90 },
+            'קרית עקרון': { zone: 'יהודה', shelterTime: 90 },
+            'מזכרת בתיה': { zone: 'יהודה', shelterTime: 90 },
+
+            // יישובים דרוזים וערבים
+            'דאלית אל כרמל': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'עוספיא': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'מג\'דל שמס': { zone: 'גולן', shelterTime: 60 },
+            'מסעדה': { zone: 'גולן', shelterTime: 60 },
+            'בוקעתא': { zone: 'גולן', shelterTime: 60 },
+         }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -899,6 +1166,13 @@
             const city = cityInput.value;
             if (!city) return;
 
+            // איפוס מידע קודם כשמחליפים עיר
+            if (currentCity && currentCity !== city) {
+                resetAlertDisplay();
+                alertHistory = [];
+                renderHistory();
+            }
+
             currentCity = city;
             registeredCity.textContent = city;
             alertSystem.style.display = 'block';
@@ -916,6 +1190,25 @@
             if (!window.statusTimeInterval) {
                 window.statusTimeInterval = setInterval(updateStatusTime, 1000);
             }
+        }
+
+        function resetAlertDisplay() {
+            // איפוס מצב התראה למצב רגיל
+            const statusCard = currentStatus;
+            const statusIcon = statusCard.querySelector('.status-icon');
+            const statusTitle = statusCard.querySelector('.status-title');
+            const statusDescription = statusCard.querySelector('.status-description');
+
+            statusCard.className = 'status-card safe';
+            statusIcon.textContent = '✅';
+            statusTitle.textContent = 'מצב רגיל';
+            statusDescription.textContent = 'אין התראות פעילות באזור שלך';
+            shelterTime.textContent = 'מידע יופיע בעת התראה';
+            
+            // איפוס כותרת הדף
+            document.title = 'מערכת התראות חכמה - פיקוד העורף';
+            
+            console.log('🔄 איפוס מצב התראה עבור עיר חדשה');
         }
 
         function updateVolume() {
