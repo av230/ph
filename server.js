@@ -38,11 +38,11 @@
 //         priority: 'medium'
 //     },
 //     'shelter': {
-//         text: '🚨 אזעקה ב{city}! היכנסו לחדר המוגן מיידית ותישארו שם עד הודעה נוספת!',
+//         text: '🚨 אזעקה ב{city}! , הכל יהיה טוב בעזרתו יתברך היכנסו לחדר המוגן מיידית ותישארו שם עד הודעה נוספת!',
 //         priority: 'high'
 //     },
 //     'all-clear': {
-//         text: '🟢 הסכנה חלפה ב{city}. ניתן לצאת מהחדר המוגן ולחזור לפעילות רגילה.',
+//         text: "🟢 ברוך ה' הסכנה חלפה ב-  {city}. ניתן לצאת מהחדר המוגן ולחזור לפעילות רגילה.",
 //         priority: 'low'
 //     },
 //     'drill': {
