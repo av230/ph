@@ -82,10 +82,17 @@
             padding: 40px;
         }
 
-        .connection-indicator {
+        .status-indicators {
             position: fixed;
             top: 20px;
             left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .connection-status, .api-status {
             background: #48bb78;
             color: white;
             padding: 10px 18px;
@@ -93,22 +100,32 @@
             font-size: 0.9em;
             font-weight: bold;
             box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
-            z-index: 1000;
             transition: all 0.3s ease;
             display: flex;
             align-items: center;
             gap: 8px;
+            min-width: 200px;
         }
 
-        .connection-indicator.disconnected {
+        .connection-status.disconnected {
             background: #f56565;
             box-shadow: 0 4px 15px rgba(245, 101, 101, 0.3);
             animation: pulse 1s infinite;
         }
 
-        .connection-indicator.degraded {
+        .api-status {
+            background: #4299e1;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+        }
+
+        .api-status.degraded {
             background: #ed8936;
             box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
+        }
+
+        .api-status.error {
+            background: #f56565;
+            box-shadow: 0 4px 15px rgba(245, 101, 101, 0.3);
         }
 
         .pulse-dot {
@@ -122,6 +139,11 @@
         @keyframes pulse-dot {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
 
         .city-selector {
@@ -160,6 +182,11 @@
             border-color: #4299e1;
             box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1), inset 0 2px 4px rgba(0,0,0,0.06);
             transform: translateY(-2px);
+        }
+
+        .city-dropdown:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         .audio-controls {
@@ -380,6 +407,21 @@
             transform: none;
         }
 
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4299e1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .history-list {
             max-height: 500px;
             overflow-y: auto;
@@ -473,29 +515,6 @@
         .notification.danger { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }
         .notification.info { background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%); }
 
-        .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #4299e1;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 768px) {
-            .main-content { padding: 20px; }
-            .header h1 { font-size: 2.2em; }
-            .status-grid { grid-template-columns: 1fr; }
-            .audio-controls { flex-direction: column; gap: 15px; }
-            .history-header { flex-direction: column; gap: 15px; align-items: stretch; }
-        }
-
         .fade-in {
             animation: fadeIn 0.5s ease-in;
         }
@@ -504,12 +523,27 @@
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        @media (max-width: 768px) {
+            .main-content { padding: 20px; }
+            .header h1 { font-size: 2.2em; }
+            .status-grid { grid-template-columns: 1fr; }
+            .audio-controls { flex-direction: column; gap: 15px; }
+            .history-header { flex-direction: column; gap: 15px; align-items: stretch; }
+            .status-indicators { position: relative; top: 0; left: 0; margin-bottom: 20px; }
+        }
     </style>
 </head>
 <body>
-    <div class="connection-indicator" id="connectionStatus">
-        <div class="pulse-dot"></div>
-        מתחבר לשרת...
+    <div class="status-indicators">
+        <div class="connection-status" id="connectionStatus">
+            <div class="pulse-dot"></div>
+            מתחבר לשרת...
+        </div>
+        <div class="api-status" id="apiStatus">
+            <div class="pulse-dot"></div>
+            בודק מקורות נתונים...
+        </div>
     </div>
 
     <div class="container fade-in">
@@ -521,16 +555,16 @@
         <div class="main-content">
             <div class="city-selector">
                 <h2>בחר את העיר שלך</h2>
-                <select id="cityDropdown" class="city-dropdown">
+                <select id="cityInput" class="city-dropdown" disabled>
                     <option value="">טוען רשימת ערים...</option>
                 </select>
                 
                 <div class="audio-controls">
                     <div class="volume-control">
-                        <label for="volumeSlider">🔊 עוצמת קול</label>
-                        <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.1" value="0.5">
+                        <label for="volume">🔊 עוצמת קול</label>
+                        <input type="range" id="volume" class="volume-slider" min="0" max="1" step="0.1" value="0.5">
                     </div>
-                    <button id="muteBtn" class="mute-btn">השתק</button>
+                    <button id="mute" class="mute-btn">השתק</button>
                 </div>
             </div>
 
@@ -607,12 +641,15 @@
         let isConnected = false;
         let isMuted = localStorage.getItem('isMuted') === 'true';
         let currentVolume = parseFloat(localStorage.getItem('volume')) || 0.5;
+        let connectionRetryCount = 0;
+        const MAX_RETRY_COUNT = 5;
 
         // DOM elements
         const connectionStatus = document.getElementById('connectionStatus');
-        const cityDropdown = document.getElementById('cityDropdown');
-        const volumeSlider = document.getElementById('volumeSlider');
-        const muteBtn = document.getElementById('muteBtn');
+        const apiStatus = document.getElementById('apiStatus');
+        const cityInput = document.getElementById('cityInput');
+        const volumeControl = document.getElementById('volume');
+        const muteButton = document.getElementById('mute');
         const alertSystem = document.getElementById('alertSystem');
         const currentStatus = document.getElementById('currentStatus');
         const registeredCity = document.getElementById('registeredCity');
@@ -627,8 +664,8 @@
         const enterSound = document.getElementById('enterSound');
         const exitSound = document.getElementById('exitSound');
 
-        // City data for shelter times
-        const cityData = {
+        // City data for shelter times (fallback)
+        const cityDataFallback = {
             'בני ברק': { zone: 'דן', shelterTime: 90 },
             'תל אביב': { zone: 'דן', shelterTime: 90 },
             'ירושלים': { zone: 'ירושלים', shelterTime: 90 },
@@ -648,17 +685,7 @@
             'טבריה': { zone: 'כינרת', shelterTime: 60 },
             'צפת': { zone: 'גליל עליון', shelterTime: 60 },
             'אילת': { zone: 'אילת', shelterTime: 180 },
-            'מודיעין': { zone: 'מודיעין', shelterTime: 90 },
-            'כרמיאל': { zone: 'גליל מערבי', shelterTime: 60 },
-            'מעלות': { zone: 'גליל מערבי', shelterTime: 60 },
-            'נהריה': { zone: 'גליל מערבי', shelterTime: 60 },
-            'עכו': { zone: 'גליל מערבי', shelterTime: 60 },
-            'קרית שמונה': { zone: 'גליל עליון', shelterTime: 30 },
-            'מטולה': { zone: 'גליל עליון', shelterTime: 15 },
-            'קצרין': { zone: 'גולן', shelterTime: 60 },
-            'אריאל': { zone: 'שומרון', shelterTime: 90 },
-            'מעלה אדומים': { zone: 'ירושלים', shelterTime: 90 },
-            'בית שמש': { zone: 'ירושלים', shelterTime: 90 }
+            'מודיעין': { zone: 'מודיעין', shelterTime: 90 }
         };
 
         // Initialize
@@ -668,15 +695,16 @@
             loadCities();
             setupEventListeners();
             
-            // Show initial connection status
+            // Show initial status
             updateConnectionStatus(false, 'מתחבר לשרת...');
+            updateApiStatus('checking', 'בודק מקורות נתונים...');
         });
 
         function initializeAudio() {
-            volumeSlider.value = currentVolume;
+            volumeControl.value = currentVolume;
             updateAudioVolume();
-            muteBtn.textContent = isMuted ? 'בטל השתקה' : 'השתק';
-            muteBtn.classList.toggle('muted', isMuted);
+            muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
+            muteButton.classList.toggle('muted', isMuted);
             
             [preAlertSound, enterSound, exitSound].forEach(audio => {
                 audio.muted = isMuted;
@@ -686,26 +714,50 @@
 
         function initializeSocket() {
             try {
-                socket = io();
+                socket = io({
+                    autoConnect: true,
+                    reconnection: true,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                    maxReconnectionAttempts: MAX_RETRY_COUNT
+                });
                 
                 socket.on('connect', () => {
                     isConnected = true;
+                    connectionRetryCount = 0;
                     updateConnectionStatus(true, 'מחובר לשרת');
                     showNotification('התחבר לשרת בהצלחה', 'success');
                     console.log('✅ Connected to server');
+                    
+                    // Enable city selection
+                    cityInput.disabled = false;
+                    loadCities();
                 });
 
-                socket.on('disconnect', () => {
+                socket.on('disconnect', (reason) => {
                     isConnected = false;
                     updateConnectionStatus(false, 'לא מחובר');
+                    updateApiStatus('error', 'אין חיבור לשרת');
+                    cityInput.disabled = true;
                     showNotification('התנתק מהשרת', 'warning');
-                    console.log('❌ Disconnected from server');
+                    console.log('❌ Disconnected from server:', reason);
                 });
 
                 socket.on('connect_error', (error) => {
+                    connectionRetryCount++;
                     isConnected = false;
-                    updateConnectionStatus(false, 'שגיאת חיבור');
+                    updateConnectionStatus(false, `ניסיון ${connectionRetryCount}/${MAX_RETRY_COUNT}`);
                     console.error('Connection error:', error);
+                    
+                    if (connectionRetryCount >= MAX_RETRY_COUNT) {
+                        updateConnectionStatus(false, 'שגיאת חיבור');
+                        showNotification('לא ניתן להתחבר לשרת', 'danger');
+                    }
+                });
+
+                socket.on('reconnect', (attemptNumber) => {
+                    console.log('Reconnected after', attemptNumber, 'attempts');
+                    showNotification('התחבר מחדש לשרת', 'success');
                 });
 
                 socket.on('connection-status', (data) => {
@@ -719,6 +771,8 @@
                 socket.on('history-update', (history) => {
                     alertHistory = history;
                     renderHistory();
+                    historyLoading.style.display = 'none';
+                    refreshBtn.disabled = false;
                 });
 
                 socket.on('global-status', (status) => {
@@ -728,64 +782,82 @@
                 socket.on('heartbeat', (data) => {
                     updateConnectionStatus(true, `מחובר (${data.connectedUsers} משתמשים)`);
                     
-                    // Show API health status
+                    // Update API status based on heartbeat
                     if (data.apiStatus) {
-                        const isHealthy = data.apiStatus.kore === 'healthy' || data.apiStatus.oref === 'healthy';
-                        if (!isHealthy) {
-                            updateConnectionStatus(true, 'מחובר (APIs לא יציבים)', 'degraded');
+                        const koreStatus = data.apiStatus.kore;
+                        const orefStatus = data.apiStatus.oref;
+                        
+                        if (koreStatus === 'healthy' || orefStatus === 'healthy') {
+                            updateApiStatus('healthy', 'מקורות נתונים תקינים');
+                        } else if (koreStatus === 'degraded' || orefStatus === 'degraded') {
+                            updateApiStatus('degraded', 'בעיה חלקית במקורות נתונים');
+                        } else {
+                            updateApiStatus('error', 'בעיה במקורות נתונים');
                         }
                     }
                 });
 
                 socket.on('server-shutdown', (data) => {
                     showNotification(data.message, 'warning');
+                    updateConnectionStatus(false, 'השרת נסגר לתחזוקה');
                 });
 
             } catch (error) {
                 console.error('Failed to initialize socket:', error);
                 updateConnectionStatus(false, 'שגיאה בהתחברות');
+                updateApiStatus('error', 'שגיאה בחיבור');
             }
         }
 
         async function loadCities() {
             try {
                 const response = await fetch('/api/cities');
-                if (!response.ok) throw new Error('Failed to load cities');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
                 const cities = await response.json();
                 
-                cityDropdown.innerHTML = '<option value="">בחר עיר</option>';
+                cityInput.innerHTML = '<option value="">בחר עיר</option>';
                 cities.forEach(city => {
                     const option = document.createElement('option');
                     option.value = city;
                     option.textContent = city;
-                    cityDropdown.appendChild(option);
+                    cityInput.appendChild(option);
                 });
                 
+                cityInput.disabled = false;
                 console.log(`Loaded ${cities.length} cities`);
+                
             } catch (error) {
                 console.error('Error loading cities:', error);
-                cityDropdown.innerHTML = '<option value="">שגיאה בטעינת ערים</option>';
-                showNotification('שגיאה בטעינת רשימת הערים', 'danger');
+                
+                // Fallback to hardcoded cities
+                cityInput.innerHTML = '<option value="">בחר עיר</option>';
+                Object.keys(cityDataFallback).forEach(city => {
+                    const option = document.createElement('option');
+                    option.value = city;
+                    option.textContent = city;
+                    cityInput.appendChild(option);
+                });
+                
+                cityInput.disabled = false;
+                showNotification('נטענו ערים מקומיות (אין חיבור לשרת)', 'warning');
             }
         }
 
         function setupEventListeners() {
-            cityDropdown.addEventListener('change', registerCity);
-            volumeSlider.addEventListener('input', updateVolume);
-            muteBtn.addEventListener('click', toggleMute);
+            cityInput.addEventListener('change', registerCity);
+            volumeControl.addEventListener('input', updateVolume);
+            muteButton.addEventListener('click', toggleMute);
             refreshBtn.addEventListener('click', refreshHistory);
         }
 
         function registerCity() {
-            const city = cityDropdown.value;
+            const city = cityInput.value;
             if (!city) return;
 
             currentCity = city;
             registeredCity.textContent = city;
             alertSystem.style.display = 'block';
-            
-            // Add fade-in animation
             alertSystem.classList.add('fade-in');
             
             if (socket && socket.connected) {
@@ -803,7 +875,7 @@
         }
 
         function updateVolume() {
-            currentVolume = parseFloat(volumeSlider.value);
+            currentVolume = parseFloat(volumeControl.value);
             localStorage.setItem('volume', currentVolume);
             updateAudioVolume();
         }
@@ -818,8 +890,8 @@
             isMuted = !isMuted;
             localStorage.setItem('isMuted', isMuted);
             
-            muteBtn.textContent = isMuted ? 'בטל השתקה' : 'השתק';
-            muteBtn.classList.toggle('muted', isMuted);
+            muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
+            muteButton.classList.toggle('muted', isMuted);
             
             [preAlertSound, enterSound, exitSound].forEach(audio => {
                 audio.muted = isMuted;
@@ -876,12 +948,29 @@
 
             // Update shelter time if relevant
             if ((alert.type === 'shelter' || alert.type === 'early-warning') && currentCity) {
-                const cityInfo = cityData[currentCity];
-                if (cityInfo && cityInfo.shelterTime) {
-                    shelterTime.textContent = `${cityInfo.shelterTime} שניות`;
-                }
+                updateShelterTime();
             } else {
                 shelterTime.textContent = 'מידע יופיע בעת התראה';
+            }
+        }
+
+        async function updateShelterTime() {
+            try {
+                const response = await fetch(`/api/city/${encodeURIComponent(currentCity)}`);
+                if (response.ok) {
+                    const cityInfo = await response.json();
+                    shelterTime.textContent = `${cityInfo.shelterTime} שניות`;
+                } else {
+                    throw new Error('API call failed');
+                }
+            } catch (error) {
+                // Fallback to local data
+                const cityInfo = cityDataFallback[currentCity];
+                if (cityInfo) {
+                    shelterTime.textContent = `${cityInfo.shelterTime} שניות`;
+                } else {
+                    shelterTime.textContent = 'מידע לא זמין';
+                }
             }
         }
 
@@ -920,12 +1009,14 @@
             
             if (socket && socket.connected) {
                 socket.emit('get-history', currentCity);
+            } else {
+                // If no connection, just hide loading and enable button
+                setTimeout(() => {
+                    historyLoading.style.display = 'none';
+                    refreshBtn.disabled = false;
+                    showNotification('אין חיבור לשרת', 'warning');
+                }, 1000);
             }
-            
-            setTimeout(() => {
-                historyLoading.style.display = 'none';
-                refreshBtn.disabled = false;
-            }, 2000);
         }
 
         function addToHistory(alert) {
@@ -976,20 +1067,40 @@
             return types[type] || type;
         }
 
-        function updateConnectionStatus(connected, message = '', status = '') {
+        function updateConnectionStatus(connected, message = '') {
             const indicator = connectionStatus;
             const pulseDot = indicator.querySelector('.pulse-dot');
             
+            indicator.classList.toggle('disconnected', !connected);
+            
             if (connected) {
-                indicator.classList.remove('disconnected', 'degraded');
-                if (status === 'degraded') {
-                    indicator.classList.add('degraded');
-                }
                 indicator.innerHTML = `<div class="pulse-dot"></div>${message}`;
             } else {
-                indicator.classList.add('disconnected');
-                indicator.classList.remove('degraded');
                 indicator.innerHTML = `❌ ${message}`;
+            }
+        }
+
+        function updateApiStatus(status, message) {
+            const indicator = apiStatus;
+            
+            indicator.classList.remove('degraded', 'error');
+            
+            switch (status) {
+                case 'healthy':
+                    indicator.innerHTML = `<div class="pulse-dot"></div>${message}`;
+                    break;
+                case 'degraded':
+                    indicator.classList.add('degraded');
+                    indicator.innerHTML = `⚠️ ${message}`;
+                    break;
+                case 'error':
+                    indicator.classList.add('error');
+                    indicator.innerHTML = `❌ ${message}`;
+                    break;
+                case 'checking':
+                default:
+                    indicator.innerHTML = `<div class="pulse-dot"></div>${message}`;
+                    break;
             }
         }
 
@@ -1041,7 +1152,7 @@
             showNotification('אירעה שגיאה באפליקציה', 'danger');
         });
 
-        console.log('🚀 מערכת התראות חכמה נטענה בהצלחה');
+        console.log('🚀 מערכת התראות חכמה נטענה בהצלחה - גרסה 2.0.0');
     </script>
 </body>
 </html>
