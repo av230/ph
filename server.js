@@ -1,4 +1,3 @@
-
 // server.js - מערכת התראות חכמה עם תיקון CSP
 const express = require('express');
 const cors = require('cors');
@@ -20,6 +19,8 @@ const io = socketIo(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// נתוני ערים מעודכנים - רשימה מלאה
 const cityData = {
     // אזור דן ומרכז
     'אבן יהודה': { zone: 'שרון', shelterTime: 90, area: 1083 },
@@ -51,6 +52,8 @@ const cityData = {
     'רמת השרון': { zone: 'שרון', shelterTime: 90, area: 1087 },
     'רעננה': { zone: 'שרון', shelterTime: 90, area: 1082 },
     'תל אביב': { zone: 'דן', shelterTime: 90, area: 102 },
+    'שוהם': { zone: 'יהודה', shelterTime: 90, area: 1154 },
+    'חריש': { zone: 'שרון', shelterTime: 90, area: 1090 },
 
     // ירושלים והסביבה
     'ירושלים': { zone: 'ירושלים', shelterTime: 90, area: 201 },
@@ -87,6 +90,8 @@ const cityData = {
     'מגדל': { zone: 'כינרת', shelterTime: 60, area: 81 },
     'יקנעם': { zone: 'עמק יזרעאל', shelterTime: 60, area: 82 },
     'נוף הגליל': { zone: 'גליל תחתון', shelterTime: 60, area: 83 },
+    'בית שאן': { zone: 'בקעת הירדן', shelterTime: 60, area: 85 },
+    'מגדל העמק': { zone: 'עמק יזרעאל', shelterTime: 60, area: 86 },
 
     // אשקלון והדרום
     'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30, area: 1035 },
@@ -102,82 +107,36 @@ const cityData = {
     'דימונה': { zone: 'באר שבע והנגב', shelterTime: 90, area: 1204 },
     'ערד': { zone: 'באר שבע והנגב', shelterTime: 90, area: 1205 },
     'מצפה רמון': { zone: 'באר שבע והנגב', shelterTime: 180, area: 1206 },
-    'יקנעם עילית': { zone: 'באר שבע והנגב', shelterTime: 120, area: 1207 },
+    'רהט': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1208 },
+    'ערערה בנגב': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1209 },
+    'לקיה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1210 },
 
     // אילת והערבה
     'אילת': { zone: 'אילת', shelterTime: 180, area: 88 },
 
-    // יהודה ושומרון (יישובים מעבר לקו הירוק)
+    // יהודה ושומרון
     'אריאל': { zone: 'שומרון', shelterTime: 90, area: 301 },
-    'מעלה אדומים': { zone: 'ירושלים', shelterTime: 90, area: 302 },
     'בית אל': { zone: 'שומרון', shelterTime: 90, area: 303 },
-    'קרית ארבע': { zone: 'חברון', shelterTime: 90, area: 304 },
     'עמנואל': { zone: 'שומרון', shelterTime: 90, area: 305 },
     'אלקנה': { zone: 'שומרון', shelterTime: 90, area: 306 },
     'קדומים': { zone: 'שומרון', shelterTime: 90, area: 307 },
     'אפרת': { zone: 'גוש עציון', shelterTime: 90, area: 308 },
-    'בית שאן': { zone: 'בקעת הירדן', shelterTime: 60, area: 309 },
 
-    // רשויות אזוריות וערים קטנות נוספות
+    // ערים ויישובים נוספים
     'גן יבנה': { zone: 'יהודה', shelterTime: 90, area: 1150 },
-    'גדרה': { zone: 'יהודה', shelterTime: 90, area: 1151 },
     'קרית עקרון': { zone: 'יהודה', shelterTime: 90, area: 1153 },
-    'שוהם': { zone: 'יהודה', shelterTime: 90, area: 1154 },
     'מזכרת בתיה': { zone: 'יהודה', shelterTime: 90, area: 1155 },
-
-    // ערים חדשות ויישובים גדולים
-    'חריש': { zone: 'שרון', shelterTime: 90, area: 1090 },
-    'בית שאן': { zone: 'בקעת הירדן', shelterTime: 60, area: 85 },
-    'מגדל העמק': { zone: 'עמק יזרעאל', shelterTime: 60, area: 86 },
-    'שמונה': { zone: 'גליל עליון', shelterTime: 30, area: 87 },
-
-    // רשויות אזוריות חשובות
-    'גוש עציון': { zone: 'גוש עציון', shelterTime: 90, area: 310 },
-    'מטה יהודה': { zone: 'ירושלים', shelterTime: 90, area: 204 },
-    'שפלת יהודה': { zone: 'יהודה', shelterTime: 90, area: 1156 },
-    'גזר': { zone: 'יהודה', shelterTime: 90, area: 1157 },
-    'חבל מודיעין': { zone: 'מודיעין', shelterTime: 90, area: 1167 },
-
-    // ערים ויישובים נוספים בפריפריה
-    'קליה': { zone: 'בקעת הירדן', shelterTime: 90, area: 311 },
-    'אלמוג': { zone: 'בקעת הירדן', shelterTime: 90, area: 312 },
-    'יריחו': { zone: 'בקעת הירדן', shelterTime: 90, area: 313 },
-
-    // ערים ויישובים בגליל
-    'סח'נין': { zone: 'גליל תחתון', shelterTime: 60, area: 84 },
-    'אכסאל': { zone: 'גליל תחתון', shelterTime: 60, area: 85 },
-    'ג'ולס': { zone: 'גליל עליון', shelterTime: 60, area: 144 },
-    'פקיעין': { zone: 'גליל עליון', shelterTime: 60, area: 145 },
-
-    // ערים ביהודה ושומרון
-    'רמאללה': { zone: 'שומרון', shelterTime: 90, area: 314 },
-    'חברון': { zone: 'חברון', shelterTime: 90, area: 315 },
-    'נבלוס': { zone: 'שומרון', shelterTime: 90, area: 316 },
-    'ג\'נין': { zone: 'שומרון', shelterTime: 90, area: 317 },
-    'טול כרם': { zone: 'שומרון', shelterTime: 90, area: 318 },
-    'קלקיליה': { zone: 'שומרון', shelterTime: 90, area: 319 },
 
     // יישובים דרוזים וערבים
     'דאלית אל כרמל': { zone: 'חיפה והכרמל', shelterTime: 60, area: 400 },
     'עוספיא': { zone: 'חיפה והכרמל', shelterTime: 60, area: 401 },
-    'בוקעתא': { zone: 'גולן', shelterTime: 60, area: 146 },
-    'מג'דל שמס': { zone: 'גולן', shelterTime: 60, area: 147 },
+    'מגדל שמס': { zone: 'גולן', shelterTime: 60, area: 147 },
     'מסעדה': { zone: 'גולן', shelterTime: 60, area: 148 },
-    'עין קנייא': { zone: 'גולן', shelterTime: 60, area: 149 },
-
-    // יישובים בדואיים בנגב
-    'רהט': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1208 },
-    'ערערה בנגב': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1209 },
-    'לקיה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1210 },
-    'כסיפה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1211 },
-    'תל שבע': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1212 },
-    'חורה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1213 },
-    'שגב שלום': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1214 }
+    'בוקעתא': { zone: 'גולן', shelterTime: 60, area: 146 }
 };
 
-// מילון קיצורים וכינויים מורחב
+// מילון קיצורים וכינויים לערים
 const cityAliases = {
-    // קיצורים נפוצים
     'ת"א': 'תל אביב',
     'תא': 'תל אביב',
     'ירושלים': ['ירושלים', 'מעלה אדומים', 'בית שמש'],
@@ -188,55 +147,9 @@ const cityAliases = {
     'פ"ת': 'פתח תקווה',
     'פת': 'פתח תקווה',
     'ר"ג': 'רמת גן',
-    'רג': 'רמת גן',
-    'רה"ש': 'רמת השרון',
-    'רהש': 'רמת השרון',
-    'ח"ה': 'חולון',
-    'חה': 'חולון',
-    'ב"ב': 'בני ברק',
-    'בב': 'בני ברק',
-    'ק"א': 'קרית אתא',
-    'קא': 'קרית אתא',
-    'ק"ב': 'קרית ביאליק',
-    'קב': 'קרית ביאליק',
-    'ק"י': 'קרית ים',
-    'קי': 'קרית ים',
-    'ק"מ': 'קרית מוצקין',
-    'קמ': 'קרית מוצקין',
-    'ק"ג': 'קרית גת',
-    'קג': 'קרית גת',
-    'ק"מל': 'קרית מלאכי',
-    'קמל': 'קרית מלאכי',
-
-    // כינויים נוספים
-    'יפו': 'תל אביב',
-    'שכונת יפו': 'תל אביב',
-    'נוה צדק': 'תל אביב',
-    'פלורנטין': 'תל אביב',
-    'נמל תל אביב': 'תל אביב',
-    
-    // כינויים לירושלים
-    'ירושלים המערבית': 'ירושלים',
-    'ירושלים המזרחית': 'ירושלים',
-    'העיר העתיקה': 'ירושלים',
-    'מרכז ירושלים': 'ירושלים',
-    
-    // כינויים לחיפה
-    'קרמל': 'חיפה',
-    'נמל חיפה': 'חיפה',
-    'הדר': 'חיפה',
-    'כרמל התחתון': 'חיפה',
-    'כרמל העליון': 'חיפה',
-
-    // כינויים נוספים
-    'עיר דוד': 'ירושלים',
-    'עיר הנמל': 'חיפה',
-    'עיר החול': 'תל אביב',
-    'הכרמל': 'חיפה',
-    'העמק': 'עפולה',
-    'הגליל העליון': 'צפת',
-    'הנגב': 'באר שבע'
+    'רג': 'רמת גן'
 };
+
 // משתנים גלובליים
 let alertHistory = [];
 let lastAlert = null;
@@ -608,7 +521,7 @@ function mapAlertTypeFromKore(koreAlert) {
             type: 'all-clear',
             title: 'יציאה מהממ"ד',
             icon: '🟢',
-            description: 'הסכנה חלפה  תודה לאל- ניתן לצאת מהחדר המוגן',
+            description: 'הסכנה חלפה תודה לאל- ניתן לצאת מהחדר המוגן',
             severity: 'low',
             class: 'safe'
         };
@@ -827,7 +740,7 @@ function createAllClearAlert() {
         type: 'all-clear',
         title: 'יציאה מהממ"ד',
         icon: '🟢',
-        description: 'הסכנה חלפה תודה לאל - ניתן לצאת מהחדר המוגן',
+        description: 'הסכנה חלפה תודה לאל- ניתן לצאת מהחדר המוגן',
         severity: 'low',
         class: 'safe',
         cities: lastAlert.cities || [],
