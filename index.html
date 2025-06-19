@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת התראות חכמה - פיקוד העורף</title>
+    <meta name="description" content="מערכת התראות מתקדמת לפיקוד העורף עם עדכונים בזמן אמת">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚨</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(255,255,255,0.05) 10px,
+                rgba(255,255,255,0.05) 20px
+            );
+            animation: drift 20s linear infinite;
+        }
+
+        @keyframes drift {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .header h1 {
+            font-size: 2.8em;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 2;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.3em;
+            opacity: 0.95;
+            position: relative;
+            z-index: 2;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .status-indicators {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .connection-status, .api-status {
+            background: #48bb78;
+            color: white;
+            padding: 10px 18px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 200px;
+        }
+
+        .connection-status.disconnected {
+            background: #f56565;
+            box-shadow: 0 4px 15px rgba(245, 101, 101, 0.3);
+            animation: pulse 1s infinite;
+        }
+
+        .api-status {
+            background: #4299e1;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+        }
+
+        .api-status.degraded {
+            background: #ed8936;
+            box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
+        }
+
+        .api-status.error {
+            background: #f56565;
+            box-shadow: 0 4px 15px rgba(245, 101, 101, 0.3);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .city-selector {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            border-radius: 20px;
+            padding: 35px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .city-selector h2 {
+            margin-bottom: 25px;
+            color: #2d3748;
+            font-size: 2em;
+            font-weight: 700;
+        }
+
+        .city-dropdown {
+            width: 100%;
+            max-width: 400px;
+            padding: 18px 20px;
+            font-size: 1.2em;
+            border: 3px solid #e2e8f0;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 25px;
+            transition: all 0.3s ease;
+            background: white;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);
+        }
+
+        .city-dropdown:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1), inset 0 2px 4px rgba(0,0,0,0.06);
+            transform: translateY(-2px);
+        }
+
+        .city-dropdown:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            padding: 12px 18px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .volume-slider {
+            width: 120px;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .volume-slider:hover {
+            background: #cbd5e0;
+        }
+
+        .mute-btn {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+        }
+
+        .mute-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(66, 153, 225, 0.4);
+        }
+
+        .mute-btn.muted {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .status-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border-left: 6px solid #e2e8f0;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+        }
+
+        .status-card:hover::before {
+            transform: translateX(100%);
+        }
+
+        .status-card.safe {
+            border-left-color: #48bb78;
+            background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
+        }
+
+        .status-card.warning {
+            border-left-color: #ed8936;
+            background: linear-gradient(135deg, #fffaf0 0%, #fbd38d 100%);
+            animation: pulse-warning 2s infinite;
+        }
+
+        .status-card.danger {
+            border-left-color: #f56565;
+            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+            animation: pulse-danger 1s infinite;
+        }
+
+        @keyframes pulse-warning {
+            0%, 100% { box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); }
+            50% { box-shadow: 0 15px 35px rgba(237, 137, 54, 0.3); }
+        }
+
+        @keyframes pulse-danger {
+            0%, 100% { box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); }
+            50% { box-shadow: 0 15px 35px rgba(245, 101, 101, 0.4); }
+        }
+
+        .status-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .status-icon {
+            font-size: 2.5em;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-5px); }
+            60% { transform: translateY(-3px); }
+        }
+
+        .status-title {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .status-time {
+            color: #718096;
+            font-size: 0.95em;
+            margin-bottom: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-description {
+            color: #4a5568;
+            line-height: 1.6;
+            font-size: 1.05em;
+        }
+
+        .live-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #48bb78;
+            border-radius: 50%;
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        .history-section {
+            background: white;
+            border-radius: 20px;
+            padding: 35px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #e2e8f0;
+        }
+
+        .history-title {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(66, 153, 225, 0.4);
+        }
+
+        .refresh-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4299e1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .history-list {
+            max-height: 500px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e0 #f7fafc;
+        }
+
+        .history-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .history-list::-webkit-scrollbar-track {
+            background: #f7fafc;
+            border-radius: 4px;
+        }
+
+        .history-list::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 4px;
+        }
+
+        .history-item {
+            padding: 20px;
+            border-right: 4px solid #e2e8f0;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            border-radius: 15px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .history-item:hover {
+            transform: translateX(-8px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .history-item.early-warning { border-right-color: #ed8936; }
+        .history-item.shelter { border-right-color: #f56565; }
+        .history-item.all-clear { border-right-color: #48bb78; }
+        .history-item.safe { border-right-color: #4299e1; }
+        .history-item.drill { border-right-color: #9f7aea; }
+
+        .history-time {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        .history-type {
+            font-size: 0.95em;
+            color: #718096;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .history-description {
+            color: #4a5568;
+            line-height: 1.5;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #718096;
+            font-style: italic;
+            padding: 40px 20px;
+            font-size: 1.1em;
+        }
+
+        .notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            max-width: 400px;
+            padding: 20px;
+            border-radius: 15px;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            z-index: 1001;
+            transform: translateX(100%);
+            transition: transform 0.4s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }
+        .notification.warning { background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); }
+        .notification.danger { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }
+        .notification.info { background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%); }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .main-content { padding: 20px; }
+            .header h1 { font-size: 2.2em; }
+            .status-grid { grid-template-columns: 1fr; }
+            .audio-controls { flex-direction: column; gap: 15px; }
+            .history-header { flex-direction: column; gap: 15px; align-items: stretch; }
+            .status-indicators { position: relative; top: 0; left: 0; margin-bottom: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="status-indicators">
+        <div class="connection-status" id="connectionStatus">
+            <div class="pulse-dot"></div>
+            מתחבר לשרת...
+        </div>
+        <div class="api-status" id="apiStatus">
+            <div class="pulse-dot"></div>
+            בודק מקורות נתונים...
+        </div>
+    </div>
+
+    <div class="container fade-in">
+        <div class="header">
+            <h1>🚨 מערכת התראות חכמה</h1>
+            <p>מעקב אחר התראות פיקוד העורף בזמן אמת עם טכנולוגיה מתקדמת</p>
+        </div>
+
+        <div class="main-content">
+            <div class="city-selector">
+                <h2>בחר את העיר שלך</h2>
+                <select id="cityInput" class="city-dropdown" disabled>
+                    <option value="">טוען רשימת ערים...</option>
+                </select>
+                
+                <div class="audio-controls">
+                    <div class="volume-control">
+                        <label for="volume">🔊 עוצמת קול</label>
+                        <input type="range" id="volume" class="volume-slider" min="0" max="1" step="0.1" value="0.5">
+                    </div>
+                    <button id="mute" class="mute-btn">השתק</button>
+                </div>
+            </div>
+
+            <div id="alertSystem" style="display: none;">
+                <div class="status-grid">
+                    <div class="status-card safe" id="currentStatus">
+                        <div class="status-header">
+                            <span class="status-icon">✅</span>
+                            <div>
+                                <div class="status-title">מצב רגיל</div>
+                                <div class="status-time" id="statusTime">
+                                    <div class="live-indicator"></div>
+                                    עדכון אחרון: טוען...
+                                </div>
+                            </div>
+                        </div>
+                        <div class="status-description">אין התראות פעילות באזור שלך</div>
+                    </div>
+
+                    <div class="status-card">
+                        <div class="status-header">
+                            <span class="status-icon">📍</span>
+                            <div>
+                                <div class="status-title">עיר רשומה</div>
+                                <div class="status-description" id="registeredCity">לא נבחרה עיר</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="status-card">
+                        <div class="status-header">
+                            <span class="status-icon">⏱️</span>
+                            <div>
+                                <div class="status-title">זמן לממ"ד</div>
+                                <div class="status-description" id="shelterTime">מידע יופיע בעת התראה</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="history-section">
+                    <div class="history-header">
+                        <h2 class="history-title">
+                            🕘 היסטוריית התראות
+                            <span class="loading-spinner" id="historyLoading" style="display: none;"></span>
+                        </h2>
+                        <button class="refresh-btn" id="refreshBtn">רענן</button>
+                    </div>
+                    <div class="history-list" id="alertHistory">
+                        <div class="no-data">בחר עיר לצפייה בהיסטוריית התראות</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="preAlertSound" preload="auto">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
+    </audio>
+    <audio id="enterSound" preload="auto">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
+    </audio>
+    <audio id="exitSound" preload="auto">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
+    </audio>
+
+    <script>
+        // Global variables
+        let socket;
+        let currentCity = '';
+        let alertHistory = [];
+        let lastAlertId = null;
+        let isConnected = false;
+        let isMuted = localStorage.getItem('isMuted') === 'true';
+        let currentVolume = parseFloat(localStorage.getItem('volume')) || 0.5;
+        let connectionRetryCount = 0;
+        const MAX_RETRY_COUNT = 5;
+
+        // DOM elements
+        const connectionStatus = document.getElementById('connectionStatus');
+        const apiStatus = document.getElementById('apiStatus');
+        const cityInput = document.getElementById('cityInput');
+        const volumeControl = document.getElementById('volume');
+        const muteButton = document.getElementById('mute');
+        const alertSystem = document.getElementById('alertSystem');
+        const currentStatus = document.getElementById('currentStatus');
+        const registeredCity = document.getElementById('registeredCity');
+        const shelterTime = document.getElementById('shelterTime');
+        const statusTime = document.getElementById('statusTime');
+        const alertHistoryEl = document.getElementById('alertHistory');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const historyLoading = document.getElementById('historyLoading');
+
+        // Audio elements
+        const preAlertSound = document.getElementById('preAlertSound');
+        const enterSound = document.getElementById('enterSound');
+        const exitSound = document.getElementById('exitSound');
+
+        // City data for shelter times (fallback)
+        const cityDataFallback = {
+            'בני ברק': { zone: 'דן', shelterTime: 90 },
+            'תל אביב': { zone: 'דן', shelterTime: 90 },
+            'ירושלים': { zone: 'ירושלים', shelterTime: 90 },
+            'חיפה': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'אשדוד': { zone: 'אשקלון והסביבה', shelterTime: 30 },
+            'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30 },
+            'באר שבע': { zone: 'באר שבע והנגב', shelterTime: 60 },
+            'נתניה': { zone: 'שרון', shelterTime: 45 },
+            'חולון': { zone: 'דן', shelterTime: 90 },
+            'רמת גן': { zone: 'דן', shelterTime: 90 },
+            'פתח תקווה': { zone: 'דן', shelterTime: 90 },
+            'ראשון לציון': { zone: 'דן', shelterTime: 90 },
+            'רעננה': { zone: 'שרון', shelterTime: 90 },
+            'כפר סבא': { zone: 'שרון', shelterTime: 90 },
+            'עפולה': { zone: 'עמק יזרעאל', shelterTime: 60 },
+            'נצרת': { zone: 'עמק יזרעאל', shelterTime: 60 },
+            'טבריה': { zone: 'כינרת', shelterTime: 60 },
+            'צפת': { zone: 'גליל עליון', shelterTime: 60 },
+            'אילת': { zone: 'אילת', shelterTime: 180 },
+            'מודיעין': { zone: 'מודיעין', shelterTime: 90 }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeAudio();
+            initializeSocket();
+            loadCities();
+            setupEventListeners();
+            
+            // Show initial status
+            updateConnectionStatus(false, 'מתחבר לשרת...');
+            updateApiStatus('checking', 'בודק מקורות נתונים...');
+        });
+
+        function initializeAudio() {
+            volumeControl.value = currentVolume;
+            updateAudioVolume();
+            muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
+            muteButton.classList.toggle('muted', isMuted);
+            
+            [preAlertSound, enterSound, exitSound].forEach(audio => {
+                audio.muted = isMuted;
+                audio.volume = currentVolume;
+            });
+        }
+
+        function initializeSocket() {
+            try {
+                socket = io({
+                    autoConnect: true,
+                    reconnection: true,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                    maxReconnectionAttempts: MAX_RETRY_COUNT
+                });
+                
+                socket.on('connect', () => {
+                    isConnected = true;
+                    connectionRetryCount = 0;
+                    updateConnectionStatus(true, 'מחובר לשרת');
+                    showNotification('התחבר לשרת בהצלחה', 'success');
+                    console.log('✅ Connected to server');
+                    
+                    // Enable city selection
+                    cityInput.disabled = false;
+                    loadCities();
+                });
+
+                socket.on('disconnect', (reason) => {
+                    isConnected = false;
+                    updateConnectionStatus(false, 'לא מחובר');
+                    updateApiStatus('error', 'אין חיבור לשרת');
+                    cityInput.disabled = true;
+                    showNotification('התנתק מהשרת', 'warning');
+                    console.log('❌ Disconnected from server:', reason);
+                });
+
+                socket.on('connect_error', (error) => {
+                    connectionRetryCount++;
+                    isConnected = false;
+                    updateConnectionStatus(false, `ניסיון ${connectionRetryCount}/${MAX_RETRY_COUNT}`);
+                    console.error('Connection error:', error);
+                    
+                    if (connectionRetryCount >= MAX_RETRY_COUNT) {
+                        updateConnectionStatus(false, 'שגיאת חיבור');
+                        showNotification('לא ניתן להתחבר לשרת', 'danger');
+                    }
+                });
+
+                socket.on('reconnect', (attemptNumber) => {
+                    console.log('Reconnected after', attemptNumber, 'attempts');
+                    showNotification('התחבר מחדש לשרת', 'success');
+                });
+
+                socket.on('connection-status', (data) => {
+                    updateConnectionStatus(data.connected, data.connected ? 'מחובר (Live)' : 'לא מחובר');
+                });
+
+                socket.on('alert-update', (alert) => {
+                    handleAlertUpdate(alert);
+                });
+
+                socket.on('history-update', (history) => {
+                    alertHistory = history;
+                    renderHistory();
+                    historyLoading.style.display = 'none';
+                    refreshBtn.disabled = false;
+                });
+
+                socket.on('global-status', (status) => {
+                    console.log('Global status update:', status);
+                });
+
+                socket.on('heartbeat', (data) => {
+                    updateConnectionStatus(true, `מחובר (${data.connectedUsers} משתמשים)`);
+                    
+                    // Update API status based on heartbeat
+                    if (data.apiStatus) {
+                        const koreStatus = data.apiStatus.kore;
+                        const orefStatus = data.apiStatus.oref;
+                        
+                        if (koreStatus === 'healthy' || orefStatus === 'healthy') {
+                            updateApiStatus('healthy', 'מקורות נתונים תקינים');
+                        } else if (koreStatus === 'degraded' || orefStatus === 'degraded') {
+                            updateApiStatus('degraded', 'בעיה חלקית במקורות נתונים');
+                        } else {
+                            updateApiStatus('error', 'בעיה במקורות נתונים');
+                        }
+                    }
+                });
+
+                socket.on('server-shutdown', (data) => {
+                    showNotification(data.message, 'warning');
+                    updateConnectionStatus(false, 'השרת נסגר לתחזוקה');
+                });
+
+            } catch (error) {
+                console.error('Failed to initialize socket:', error);
+                updateConnectionStatus(false, 'שגיאה בהתחברות');
+                updateApiStatus('error', 'שגיאה בחיבור');
+            }
+        }
+
+        async function loadCities() {
+            try {
+                const response = await fetch('/api/cities');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const cities = await response.json();
+                
+                cityInput.innerHTML = '<option value="">בחר עיר</option>';
+                cities.forEach(city => {
+                    const option = document.createElement('option');
+                    option.value = city;
+                    option.textContent = city;
+                    cityInput.appendChild(option);
+                });
+                
+                cityInput.disabled = false;
+                console.log(`Loaded ${cities.length} cities`);
+                
+            } catch (error) {
+                console.error('Error loading cities:', error);
+                
+                // Fallback to hardcoded cities
+                cityInput.innerHTML = '<option value="">בחר עיר</option>';
+                Object.keys(cityDataFallback).forEach(city => {
+                    const option = document.createElement('option');
+                    option.value = city;
+                    option.textContent = city;
+                    cityInput.appendChild(option);
+                });
+                
+                cityInput.disabled = false;
+                showNotification('נטענו ערים מקומיות (אין חיבור לשרת)', 'warning');
+            }
+        }
+
+        function setupEventListeners() {
+            cityInput.addEventListener('change', registerCity);
+            volumeControl.addEventListener('input', updateVolume);
+            muteButton.addEventListener('click', toggleMute);
+            refreshBtn.addEventListener('click', refreshHistory);
+        }
+
+        function registerCity() {
+            const city = cityInput.value;
+            if (!city) return;
+
+            currentCity = city;
+            registeredCity.textContent = city;
+            alertSystem.style.display = 'block';
+            alertSystem.classList.add('fade-in');
+            
+            if (socket && socket.connected) {
+                socket.emit('register-city', city);
+                socket.emit('get-history', city);
+            }
+            
+            showNotification(`נרשמת בהצלחה להתראות עבור ${city}`, 'success');
+            
+            // Start real-time updates
+            updateStatusTime();
+            if (!window.statusTimeInterval) {
+                window.statusTimeInterval = setInterval(updateStatusTime, 1000);
+            }
+        }
+
+        function updateVolume() {
+            currentVolume = parseFloat(volumeControl.value);
+            localStorage.setItem('volume', currentVolume);
+            updateAudioVolume();
+        }
+
+        function updateAudioVolume() {
+            [preAlertSound, enterSound, exitSound].forEach(audio => {
+                audio.volume = currentVolume;
+            });
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            localStorage.setItem('isMuted', isMuted);
+            
+            muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
+            muteButton.classList.toggle('muted', isMuted);
+            
+            [preAlertSound, enterSound, exitSound].forEach(audio => {
+                audio.muted = isMuted;
+            });
+        }
+
+        function handleAlertUpdate(alert) {
+            console.log('Alert update received:', alert);
+            
+            // Prevent duplicate alerts
+            if (alert.id && alert.id === lastAlertId) {
+                return;
+            }
+            
+            lastAlertId = alert.id;
+            
+            updateAlertDisplay(alert);
+            playAlertSound(alert.type);
+            showNotification(`${alert.icon} ${alert.title}${currentCity ? ` ב${currentCity}` : ''}`, alert.severity || 'info');
+            
+            // Update page title for urgent alerts
+            if (alert.type === 'shelter') {
+                document.title = `🚨 אזעקה - ${currentCity}`;
+                
+                // Try to show browser notification
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('🚨 אזעקה!', {
+                        body: `${alert.description} ב${currentCity}`,
+                        requireInteraction: true,
+                        tag: 'alert'
+                    });
+                }
+            } else if (alert.type === 'safe' || alert.type === 'all-clear') {
+                document.title = 'מערכת התראות חכמה - פיקוד העורף';
+            }
+            
+            // Add to history
+            addToHistory(alert);
+        }
+
+        function updateAlertDisplay(alert) {
+            const statusCard = currentStatus;
+            const statusIcon = statusCard.querySelector('.status-icon');
+            const statusTitle = statusCard.querySelector('.status-title');
+            const statusDescription = statusCard.querySelector('.status-description');
+
+            // Update card class and colors
+            statusCard.className = `status-card ${alert.class || 'safe'}`;
+            
+            // Update content
+            statusIcon.textContent = alert.icon || '✅';
+            statusTitle.textContent = alert.title || 'מצב רגיל';
+            statusDescription.textContent = alert.description || 'אין התראות פעילות';
+
+            // Update shelter time if relevant
+            if ((alert.type === 'shelter' || alert.type === 'early-warning') && currentCity) {
+                updateShelterTime();
+            } else {
+                shelterTime.textContent = 'מידע יופיע בעת התראה';
+            }
+        }
+
+        async function updateShelterTime() {
+            try {
+                const response = await fetch(`/api/city/${encodeURIComponent(currentCity)}`);
+                if (response.ok) {
+                    const cityInfo = await response.json();
+                    shelterTime.textContent = `${cityInfo.shelterTime} שניות`;
+                } else {
+                    throw new Error('API call failed');
+                }
+            } catch (error) {
+                // Fallback to local data
+                const cityInfo = cityDataFallback[currentCity];
+                if (cityInfo) {
+                    shelterTime.textContent = `${cityInfo.shelterTime} שניות`;
+                } else {
+                    shelterTime.textContent = 'מידע לא זמין';
+                }
+            }
+        }
+
+        function playAlertSound(alertType) {
+            if (isMuted) return;
+
+            let audioToPlay;
+            switch (alertType) {
+                case 'early-warning':
+                    audioToPlay = preAlertSound;
+                    break;
+                case 'shelter':
+                    audioToPlay = enterSound;
+                    break;
+                case 'all-clear':
+                    audioToPlay = exitSound;
+                    break;
+                default:
+                    return;
+            }
+
+            audioToPlay.currentTime = 0;
+            audioToPlay.play().catch(e => {
+                console.warn('Cannot play audio:', e);
+            });
+        }
+
+        function refreshHistory() {
+            if (!currentCity) {
+                showNotification('בחר עיר תחילה', 'warning');
+                return;
+            }
+            
+            historyLoading.style.display = 'inline-block';
+            refreshBtn.disabled = true;
+            
+            if (socket && socket.connected) {
+                socket.emit('get-history', currentCity);
+            } else {
+                // If no connection, just hide loading and enable button
+                setTimeout(() => {
+                    historyLoading.style.display = 'none';
+                    refreshBtn.disabled = false;
+                    showNotification('אין חיבור לשרת', 'warning');
+                }, 1000);
+            }
+        }
+
+        function addToHistory(alert) {
+            const historyItem = {
+                time: alert.hebrewTime || new Date().toLocaleString('he-IL'),
+                type: alert.type,
+                title: alert.title,
+                description: alert.description,
+                city: currentCity
+            };
+            
+            alertHistory.unshift(historyItem);
+            if (alertHistory.length > 20) {
+                alertHistory = alertHistory.slice(0, 20);
+            }
+            
+            renderHistory();
+        }
+
+        function renderHistory() {
+            if (!alertHistory || alertHistory.length === 0) {
+                alertHistoryEl.innerHTML = '<div class="no-data">אין היסטוריית התראות עדיין</div>';
+                return;
+            }
+
+            const historyHTML = alertHistory.map(item => `
+                <div class="history-item ${item.type || 'safe'}">
+                    <div class="history-time">${item.hebrewTime || item.time}</div>
+                    <div class="history-type">${getAlertTypeText(item.type)} ${currentCity ? `- ${currentCity}` : ''}</div>
+                    <div class="history-description">${item.description || 'אין תיאור'}</div>
+                </div>
+            `).join('');
+
+            alertHistoryEl.innerHTML = historyHTML;
+        }
+
+        function getAlertTypeText(type) {
+            const types = {
+                'safe': 'מצב רגיל',
+                'early-warning': 'התראה מוקדמת',
+                'shelter': 'כניסה לממ"ד',
+                'all-clear': 'יציאה מממ"ד',
+                'drill': 'תרגיל',
+                'radiological': 'אירוע רדיולוגי',
+                'earthquake': 'רעידת אדמה',
+                'unknown': 'התראה לא מוכרת'
+            };
+            return types[type] || type;
+        }
+
+        function updateConnectionStatus(connected, message = '') {
+            const indicator = connectionStatus;
+            const pulseDot = indicator.querySelector('.pulse-dot');
+            
+            indicator.classList.toggle('disconnected', !connected);
+            
+            if (connected) {
+                indicator.innerHTML = `<div class="pulse-dot"></div>${message}`;
+            } else {
+                indicator.innerHTML = `❌ ${message}`;
+            }
+        }
+
+        function updateApiStatus(status, message) {
+            const indicator = apiStatus;
+            
+            indicator.classList.remove('degraded', 'error');
+            
+            switch (status) {
+                case 'healthy':
+                    indicator.innerHTML = `<div class="pulse-dot"></div>${message}`;
+                    break;
+                case 'degraded':
+                    indicator.classList.add('degraded');
+                    indicator.innerHTML = `⚠️ ${message}`;
+                    break;
+                case 'error':
+                    indicator.classList.add('error');
+                    indicator.innerHTML = `❌ ${message}`;
+                    break;
+                case 'checking':
+                default:
+                    indicator.innerHTML = `<div class="pulse-dot"></div>${message}`;
+                    break;
+            }
+        }
+
+        function updateStatusTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('he-IL', {
+                timeZone: 'Asia/Jerusalem',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            
+            statusTime.innerHTML = `<div class="live-indicator"></div>עדכון אחרון: ${timeString}`;
+        }
+
+        function showNotification(message, type = 'info') {
+            // Remove existing notifications
+            const existingNotifications = document.querySelectorAll('.notification');
+            existingNotifications.forEach(notif => notif.remove());
+
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            // Trigger animation
+            setTimeout(() => notification.classList.add('show'), 100);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 400);
+            }, 5000);
+        }
+
+        // Request notification permission on load
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    console.log('Notification permission granted');
+                }
+            });
+        }
+
+        // Error handling
+        window.addEventListener('error', (e) => {
+            console.error('Application error:', e.error);
+            showNotification('אירעה שגיאה באפליקציה', 'danger');
+        });
+
+        console.log('🚀 מערכת התראות חכמה נטענה בהצלחה - גרסה 2.0.0');
+    </script>
+</body>
+</html>
