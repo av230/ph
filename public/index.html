@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>מערכת התראות חכמה - פיקוד העורף</title>
+    <meta name="description" content="מערכת התראות מתקדמת לפיקוד העורף עם עדכונים בזמן אמת">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚨</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <style>
         * {
             margin: 0;
@@ -86,19 +88,40 @@
             left: 20px;
             background: #48bb78;
             color: white;
-            padding: 8px 16px;
+            padding: 10px 18px;
             border-radius: 25px;
             font-size: 0.9em;
             font-weight: bold;
             box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
             z-index: 1000;
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .connection-indicator.disconnected {
             background: #f56565;
             box-shadow: 0 4px 15px rgba(245, 101, 101, 0.3);
             animation: pulse 1s infinite;
+        }
+
+        .connection-indicator.degraded {
+            background: #ed8936;
+            box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
         }
 
         .city-selector {
@@ -153,9 +176,9 @@
             align-items: center;
             gap: 10px;
             background: white;
-            padding: 10px 15px;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 12px 18px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
 
         .volume-slider {
@@ -165,6 +188,11 @@
             border-radius: 3px;
             outline: none;
             cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .volume-slider:hover {
+            background: #cbd5e0;
         }
 
         .mute-btn {
@@ -172,7 +200,7 @@
             color: white;
             border: none;
             padding: 12px 20px;
-            border-radius: 10px;
+            border-radius: 12px;
             cursor: pointer;
             font-weight: bold;
             transition: all 0.3s ease;
@@ -279,6 +307,9 @@
             font-size: 0.95em;
             margin-bottom: 12px;
             font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .status-description {
@@ -289,11 +320,10 @@
 
         .live-indicator {
             display: inline-block;
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             background: #48bb78;
             border-radius: 50%;
-            margin-right: 8px;
             animation: blink 1.5s infinite;
         }
 
@@ -324,7 +354,7 @@
             color: #2d3748;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
         .refresh-btn {
@@ -342,6 +372,12 @@
         .refresh-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(66, 153, 225, 0.4);
+        }
+
+        .refresh-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .history-list {
@@ -384,6 +420,7 @@
         .history-item.shelter { border-right-color: #f56565; }
         .history-item.all-clear { border-right-color: #48bb78; }
         .history-item.safe { border-right-color: #4299e1; }
+        .history-item.drill { border-right-color: #9f7aea; }
 
         .history-time {
             font-weight: bold;
@@ -436,20 +473,12 @@
         .notification.danger { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }
         .notification.info { background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%); }
 
-        @media (max-width: 768px) {
-            .main-content { padding: 20px; }
-            .header h1 { font-size: 2.2em; }
-            .status-grid { grid-template-columns: 1fr; }
-            .audio-controls { flex-direction: column; gap: 15px; }
-            .history-header { flex-direction: column; gap: 15px; align-items: stretch; }
-        }
-
-        .loading {
+        .loading-spinner {
             display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3498db;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4299e1;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -458,18 +487,35 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        @media (max-width: 768px) {
+            .main-content { padding: 20px; }
+            .header h1 { font-size: 2.2em; }
+            .status-grid { grid-template-columns: 1fr; }
+            .audio-controls { flex-direction: column; gap: 15px; }
+            .history-header { flex-direction: column; gap: 15px; align-items: stretch; }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
     <div class="connection-indicator" id="connectionStatus">
-        <span class="live-indicator"></span>
-        מחובר לשרת
+        <div class="pulse-dot"></div>
+        מתחבר לשרת...
     </div>
 
-    <div class="container">
+    <div class="container fade-in">
         <div class="header">
             <h1>🚨 מערכת התראות חכמה</h1>
-            <p>מעקב אחר התראות פיקוד העורף בזמן אמת לעיר שלך</p>
+            <p>מעקב אחר התראות פיקוד העורף בזמן אמת עם טכנולוגיה מתקדמת</p>
         </div>
 
         <div class="main-content">
@@ -481,7 +527,7 @@
                 
                 <div class="audio-controls">
                     <div class="volume-control">
-                        <label for="volumeSlider">🔊</label>
+                        <label for="volumeSlider">🔊 עוצמת קול</label>
                         <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.1" value="0.5">
                     </div>
                     <button id="muteBtn" class="mute-btn">השתק</button>
@@ -496,7 +542,7 @@
                             <div>
                                 <div class="status-title">מצב רגיל</div>
                                 <div class="status-time" id="statusTime">
-                                    <span class="live-indicator"></span>
+                                    <div class="live-indicator"></div>
                                     עדכון אחרון: טוען...
                                 </div>
                             </div>
@@ -529,7 +575,7 @@
                     <div class="history-header">
                         <h2 class="history-title">
                             🕘 היסטוריית התראות
-                            <span class="loading" id="historyLoading" style="display: none;"></span>
+                            <span class="loading-spinner" id="historyLoading" style="display: none;"></span>
                         </h2>
                         <button class="refresh-btn" id="refreshBtn">רענן</button>
                     </div>
@@ -543,21 +589,22 @@
 
     <!-- Audio Elements -->
     <audio id="preAlertSound" preload="auto">
-        <source src="data:audio/wav;base64,UklGRvIGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
     </audio>
     <audio id="enterSound" preload="auto">
-        <source src="data:audio/wav;base64,UklGRvIGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAE" type="audio/wav">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
     </audio>
     <audio id="exitSound" preload="auto">
-        <source src="data:audio/wav;base64,UklGRvIGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAE" type="audio/wav">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmMcBSR9y/LKeSsFJXfE7+OOPwkUXrPo7a5ZFQ1Lq+LtuxQGHHfH7eSRGwUDVqvn6qZiGgkZerVdj2kPEAF" type="audio/wav">
     </audio>
 
-    <script src="/socket.io/socket.io.js"></script>
     <script>
         // Global variables
         let socket;
         let currentCity = '';
         let alertHistory = [];
+        let lastAlertId = null;
+        let isConnected = false;
         let isMuted = localStorage.getItem('isMuted') === 'true';
         let currentVolume = parseFloat(localStorage.getItem('volume')) || 0.5;
 
@@ -580,12 +627,49 @@
         const enterSound = document.getElementById('enterSound');
         const exitSound = document.getElementById('exitSound');
 
+        // City data for shelter times
+        const cityData = {
+            'בני ברק': { zone: 'דן', shelterTime: 90 },
+            'תל אביב': { zone: 'דן', shelterTime: 90 },
+            'ירושלים': { zone: 'ירושלים', shelterTime: 90 },
+            'חיפה': { zone: 'חיפה והכרמל', shelterTime: 60 },
+            'אשדוד': { zone: 'אשקלון והסביבה', shelterTime: 30 },
+            'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30 },
+            'באר שבע': { zone: 'באר שבע והנגב', shelterTime: 60 },
+            'נתניה': { zone: 'שרון', shelterTime: 45 },
+            'חולון': { zone: 'דן', shelterTime: 90 },
+            'רמת גן': { zone: 'דן', shelterTime: 90 },
+            'פתח תקווה': { zone: 'דן', shelterTime: 90 },
+            'ראשון לציון': { zone: 'דן', shelterTime: 90 },
+            'רעננה': { zone: 'שרון', shelterTime: 90 },
+            'כפר סבא': { zone: 'שרון', shelterTime: 90 },
+            'עפולה': { zone: 'עמק יזרעאל', shelterTime: 60 },
+            'נצרת': { zone: 'עמק יזרעאל', shelterTime: 60 },
+            'טבריה': { zone: 'כינרת', shelterTime: 60 },
+            'צפת': { zone: 'גליל עליון', shelterTime: 60 },
+            'אילת': { zone: 'אילת', shelterTime: 180 },
+            'מודיעין': { zone: 'מודיעין', shelterTime: 90 },
+            'כרמיאל': { zone: 'גליל מערבי', shelterTime: 60 },
+            'מעלות': { zone: 'גליל מערבי', shelterTime: 60 },
+            'נהריה': { zone: 'גליל מערבי', shelterTime: 60 },
+            'עכו': { zone: 'גליל מערבי', shelterTime: 60 },
+            'קרית שמונה': { zone: 'גליל עליון', shelterTime: 30 },
+            'מטולה': { zone: 'גליל עליון', shelterTime: 15 },
+            'קצרין': { zone: 'גולן', shelterTime: 60 },
+            'אריאל': { zone: 'שומרון', shelterTime: 90 },
+            'מעלה אדומים': { zone: 'ירושלים', shelterTime: 90 },
+            'בית שמש': { zone: 'ירושלים', shelterTime: 90 }
+        };
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             initializeAudio();
             initializeSocket();
             loadCities();
             setupEventListeners();
+            
+            // Show initial connection status
+            updateConnectionStatus(false, 'מתחבר לשרת...');
         });
 
         function initializeAudio() {
@@ -601,35 +685,73 @@
         }
 
         function initializeSocket() {
-            socket = io();
-            
-            socket.on('connect', () => {
-                updateConnectionStatus(true);
-                console.log('התחבר לשרת בהצלחה');
-            });
+            try {
+                socket = io();
+                
+                socket.on('connect', () => {
+                    isConnected = true;
+                    updateConnectionStatus(true, 'מחובר לשרת');
+                    showNotification('התחבר לשרת בהצלחה', 'success');
+                    console.log('✅ Connected to server');
+                });
 
-            socket.on('disconnect', () => {
-                updateConnectionStatus(false);
-                console.log('התנתק מהשרת');
-            });
+                socket.on('disconnect', () => {
+                    isConnected = false;
+                    updateConnectionStatus(false, 'לא מחובר');
+                    showNotification('התנתק מהשרת', 'warning');
+                    console.log('❌ Disconnected from server');
+                });
 
-            socket.on('alert-update', (alert) => {
-                handleAlertUpdate(alert);
-            });
+                socket.on('connect_error', (error) => {
+                    isConnected = false;
+                    updateConnectionStatus(false, 'שגיאת חיבור');
+                    console.error('Connection error:', error);
+                });
 
-            socket.on('history-update', (history) => {
-                alertHistory = history;
-                renderHistory();
-            });
+                socket.on('connection-status', (data) => {
+                    updateConnectionStatus(data.connected, data.connected ? 'מחובר (Live)' : 'לא מחובר');
+                });
 
-            socket.on('global-status', (status) => {
-                console.log('סטטוס גלובלי:', status);
-            });
+                socket.on('alert-update', (alert) => {
+                    handleAlertUpdate(alert);
+                });
+
+                socket.on('history-update', (history) => {
+                    alertHistory = history;
+                    renderHistory();
+                });
+
+                socket.on('global-status', (status) => {
+                    console.log('Global status update:', status);
+                });
+
+                socket.on('heartbeat', (data) => {
+                    updateConnectionStatus(true, `מחובר (${data.connectedUsers} משתמשים)`);
+                    
+                    // Show API health status
+                    if (data.apiStatus) {
+                        const isHealthy = data.apiStatus.kore === 'healthy' || data.apiStatus.oref === 'healthy';
+                        if (!isHealthy) {
+                            updateConnectionStatus(true, 'מחובר (APIs לא יציבים)', 'degraded');
+                        }
+                    }
+                });
+
+                socket.on('server-shutdown', (data) => {
+                    showNotification(data.message, 'warning');
+                });
+
+            } catch (error) {
+                console.error('Failed to initialize socket:', error);
+                updateConnectionStatus(false, 'שגיאה בהתחברות');
+            }
         }
 
         async function loadCities() {
             try {
                 const response = await fetch('/api/cities');
+                if (!response.ok) throw new Error('Failed to load cities');
+                
                 const cities = await response.json();
                 
                 cityDropdown.innerHTML = '<option value="">בחר עיר</option>';
@@ -639,8 +761,11 @@
                     option.textContent = city;
                     cityDropdown.appendChild(option);
                 });
+                
+                console.log(`Loaded ${cities.length} cities`);
             } catch (error) {
-                console.error('שגיאה בטעינת ערים:', error);
+                console.error('Error loading cities:', error);
+                cityDropdown.innerHTML = '<option value="">שגיאה בטעינת ערים</option>';
                 showNotification('שגיאה בטעינת רשימת הערים', 'danger');
             }
         }
@@ -660,15 +785,21 @@
             registeredCity.textContent = city;
             alertSystem.style.display = 'block';
             
-            // Register with server
-            socket.emit('register-city', city);
-            socket.emit('get-history', city);
+            // Add fade-in animation
+            alertSystem.classList.add('fade-in');
+            
+            if (socket && socket.connected) {
+                socket.emit('register-city', city);
+                socket.emit('get-history', city);
+            }
             
             showNotification(`נרשמת בהצלחה להתראות עבור ${city}`, 'success');
             
             // Start real-time updates
             updateStatusTime();
-            setInterval(updateStatusTime, 1000);
+            if (!window.statusTimeInterval) {
+                window.statusTimeInterval = setInterval(updateStatusTime, 1000);
+            }
         }
 
         function updateVolume() {
@@ -696,7 +827,14 @@
         }
 
         function handleAlertUpdate(alert) {
-            console.log('עדכון התראה:', alert);
+            console.log('Alert update received:', alert);
+            
+            // Prevent duplicate alerts
+            if (alert.id && alert.id === lastAlertId) {
+                return;
+            }
+            
+            lastAlertId = alert.id;
             
             updateAlertDisplay(alert);
             playAlertSound(alert.type);
@@ -705,9 +843,21 @@
             // Update page title for urgent alerts
             if (alert.type === 'shelter') {
                 document.title = `🚨 אזעקה - ${currentCity}`;
-            } else if (alert.type === 'safe') {
+                
+                // Try to show browser notification
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('🚨 אזעקה!', {
+                        body: `${alert.description} ב${currentCity}`,
+                        requireInteraction: true,
+                        tag: 'alert'
+                    });
+                }
+            } else if (alert.type === 'safe' || alert.type === 'all-clear') {
                 document.title = 'מערכת התראות חכמה - פיקוד העורף';
             }
+            
+            // Add to history
+            addToHistory(alert);
         }
 
         function updateAlertDisplay(alert) {
@@ -726,23 +876,12 @@
 
             // Update shelter time if relevant
             if ((alert.type === 'shelter' || alert.type === 'early-warning') && currentCity) {
-                fetchCityInfo(currentCity).then(cityInfo => {
-                    if (cityInfo && cityInfo.shelterTime) {
-                        shelterTime.textContent = `${cityInfo.shelterTime} שניות`;
-                    }
-                });
+                const cityInfo = cityData[currentCity];
+                if (cityInfo && cityInfo.shelterTime) {
+                    shelterTime.textContent = `${cityInfo.shelterTime} שניות`;
+                }
             } else {
                 shelterTime.textContent = 'מידע יופיע בעת התראה';
-            }
-        }
-
-        async function fetchCityInfo(cityName) {
-            try {
-                const response = await fetch(`/api/city/${encodeURIComponent(cityName)}`);
-                return await response.json();
-            } catch (error) {
-                console.error('שגיאה בטעינת מידע עיר:', error);
-                return null;
             }
         }
 
@@ -766,22 +905,44 @@
 
             audioToPlay.currentTime = 0;
             audioToPlay.play().catch(e => {
-                console.warn('לא ניתן להשמיע צליל:', e);
+                console.warn('Cannot play audio:', e);
             });
         }
 
         function refreshHistory() {
-            if (!currentCity) return;
+            if (!currentCity) {
+                showNotification('בחר עיר תחילה', 'warning');
+                return;
+            }
             
             historyLoading.style.display = 'inline-block';
             refreshBtn.disabled = true;
             
-            socket.emit('get-history', currentCity);
+            if (socket && socket.connected) {
+                socket.emit('get-history', currentCity);
+            }
             
             setTimeout(() => {
                 historyLoading.style.display = 'none';
                 refreshBtn.disabled = false;
-            }, 1000);
+            }, 2000);
+        }
+
+        function addToHistory(alert) {
+            const historyItem = {
+                time: alert.hebrewTime || new Date().toLocaleString('he-IL'),
+                type: alert.type,
+                title: alert.title,
+                description: alert.description,
+                city: currentCity
+            };
+            
+            alertHistory.unshift(historyItem);
+            if (alertHistory.length > 20) {
+                alertHistory = alertHistory.slice(0, 20);
+            }
+            
+            renderHistory();
         }
 
         function renderHistory() {
@@ -792,7 +953,7 @@
 
             const historyHTML = alertHistory.map(item => `
                 <div class="history-item ${item.type || 'safe'}">
-                    <div class="history-time">${item.hebrewTime || item.timestamp}</div>
+                    <div class="history-time">${item.hebrewTime || item.time}</div>
                     <div class="history-type">${getAlertTypeText(item.type)} ${currentCity ? `- ${currentCity}` : ''}</div>
                     <div class="history-description">${item.description || 'אין תיאור'}</div>
                 </div>
@@ -807,6 +968,7 @@
                 'early-warning': 'התראה מוקדמת',
                 'shelter': 'כניסה לממ"ד',
                 'all-clear': 'יציאה מממ"ד',
+                'drill': 'תרגיל',
                 'radiological': 'אירוע רדיולוגי',
                 'earthquake': 'רעידת אדמה',
                 'unknown': 'התראה לא מוכרת'
@@ -814,16 +976,20 @@
             return types[type] || type;
         }
 
-        function updateConnectionStatus(connected) {
+        function updateConnectionStatus(connected, message = '', status = '') {
             const indicator = connectionStatus;
-            const liveIndicator = indicator.querySelector('.live-indicator');
+            const pulseDot = indicator.querySelector('.pulse-dot');
             
             if (connected) {
-                indicator.classList.remove('disconnected');
-                indicator.innerHTML = '<span class="live-indicator"></span>מחובר לשרת';
+                indicator.classList.remove('disconnected', 'degraded');
+                if (status === 'degraded') {
+                    indicator.classList.add('degraded');
+                }
+                indicator.innerHTML = `<div class="pulse-dot"></div>${message}`;
             } else {
                 indicator.classList.add('disconnected');
-                indicator.innerHTML = '❌ לא מחובר';
+                indicator.classList.remove('degraded');
+                indicator.innerHTML = `❌ ${message}`;
             }
         }
 
@@ -836,7 +1002,7 @@
                 second: '2-digit'
             });
             
-            statusTime.innerHTML = `<span class="live-indicator"></span>עדכון אחרון: ${timeString}`;
+            statusTime.innerHTML = `<div class="live-indicator"></div>עדכון אחרון: ${timeString}`;
         }
 
         function showNotification(message, type = 'info') {
@@ -860,9 +1026,18 @@
             }, 5000);
         }
 
+        // Request notification permission on load
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    console.log('Notification permission granted');
+                }
+            });
+        }
+
         // Error handling
         window.addEventListener('error', (e) => {
-            console.error('שגיאה באפליקציה:', e.error);
+            console.error('Application error:', e.error);
             showNotification('אירעה שגיאה באפליקציה', 'danger');
         });
 
