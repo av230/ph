@@ -1006,20 +1006,22 @@
                 socket = io({
                     autoConnect: true,
                     reconnection: true,
-                    reconnectionDelay: 1000,
-                    reconnectionDelayMax: 5000,
+                    reconnectionDelay: 2000,
+                    reconnectionDelayMax: 10000,
                     maxReconnectionAttempts: MAX_RETRY_COUNT,
                     timeout: 20000,
-                    forceNew: true,
-                    transports: ['websocket', 'polling']
+                    forceNew: false,
+                    transports: ['polling', 'websocket'],
+                    upgrade: true,
+                    rememberUpgrade: true
                 });
                 
                 socket.on('connect', () => {
                     isConnected = true;
                     connectionRetryCount = 0;
-                    updateConnectionStatus(true, 'מחובר לשרת');
+                    updateConnectionStatus(true, `מחובר לשרת (${socket.io.engine.transport.name})`);
                     showNotification('התחבר לשרת בהצלחה', 'success');
-                    console.log('✅ Connected to server successfully');
+                    console.log('✅ Connected to server successfully via:', socket.io.engine.transport.name);
                     
                     cityInput.disabled = false;
                     
@@ -1049,8 +1051,8 @@
                     console.error('❌ Connection error:', error);
                     
                     if (connectionRetryCount >= MAX_RETRY_COUNT) {
-                        updateConnectionStatus(false, 'כשל בחיבור');
-                        showNotification('לא ניתן להתחבר לשרת - בדוק חיבור אינטרנט', 'danger');
+                        updateConnectionStatus(false, 'כשל בחיבור - נסה לרענן');
+                        showNotification('לא ניתן להתחבר לשרת - רענן את הדף', 'danger');
                     }
                 });
 
@@ -1115,6 +1117,16 @@
                 socket.on('server-shutdown', (data) => {
                     showNotification(data.message, 'warning');
                     updateConnectionStatus(false, 'השרת נסגר לתחזוקה');
+                });
+
+                // Transport events for debugging
+                socket.io.on('upgrade', () => {
+                    console.log('⬆️ Upgraded to:', socket.io.engine.transport.name);
+                    updateConnectionStatus(true, `מחובר (${socket.io.engine.transport.name})`);
+                });
+
+                socket.io.on('upgradeError', (error) => {
+                    console.log('❌ Upgrade error:', error);
                 });
 
             } catch (error) {
