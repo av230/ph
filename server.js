@@ -20,7 +20,7 @@ const io = socketIo(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// נתוני ערים מעודכנים - רשימה מלאה
+// נתוני ערים מעודכנים - רשימה מלאה + ערים חסרות
 const cityData = {
     'אבו גוש': { zone: 'ירושלים', shelterTime: 90, area: 203, established: 1994 },
     'אבן יהודה': { zone: 'שרון', shelterTime: 90, area: 1083, established: 1932 },
@@ -125,7 +125,35 @@ const cityData = {
     'טייבה': { zone: 'משולש', shelterTime: 45, area: 404, established: 1200 },
     'טירת כרמל': { zone: 'חיפה והכרמל', shelterTime: 60, area: 402, established: 1992 },
     'תל אביב יפו': { zone: 'דן', shelterTime: 90, area: 102, established: 1909 },
+    
+    // *** הוספת ערים חסרות שהופיעו בהתראות ***
+    // אזור ים המלח
+    'בתי מלון ים המלח': { zone: 'ים המלח', shelterTime: 60, area: 1301, established: 1960 },
+    'מלונות ים המלח מרכז': { zone: 'ים המלח', shelterTime: 60, area: 1302, established: 1960 },
+    'מלונות ים המלח צפון': { zone: 'ים המלח', shelterTime: 60, area: 1303, established: 1960 },
+    'מלונות ים המלח דרום': { zone: 'ים המלח', shelterTime: 60, area: 1304, established: 1960 },
+    'נווה זוהר': { zone: 'ים המלח', shelterTime: 60, area: 1305, established: 1969 },
+    'עין בוקק': { zone: 'ים המלח', shelterTime: 60, area: 1306, established: 1986 },
+    'מצדה': { zone: 'ים המלח', shelterTime: 60, area: 1307, established: -73 },
+    'עין גדי': { zone: 'ים המלח', shelterTime: 60, area: 1308, established: 1956 },
+    
+    // יישובי גבול נוספים
+    'מתת': { zone: 'גליל עליון', shelterTime: 15, area: 144, established: 1980 },
+    'מרגליות': { zone: 'גליל עליון', shelterTime: 15, area: 145, established: 1951 },
+    'דן': { zone: 'גליל עליון', shelterTime: 15, area: 146, established: 1939 },
+    'שמיר': { zone: 'גליל עליון', shelterTime: 15, area: 147, established: 1944 },
+    'הגושרים': { zone: 'גליל עליון', shelterTime: 15, area: 148, established: 1948 },
+    'נאות מרדכי': { zone: 'גליל עליון', shelterTime: 15, area: 149, established: 1946 },
+    
+    // אזור עוטף עזה
+    'שדה אברהם': { zone: 'עוטף עזה', shelterTime: 15, area: 1310, established: 1982 },
+    'תקומה': { zone: 'עוטף עזה', shelterTime: 15, area: 1311, established: 1949 },
+    'ניר עם': { zone: 'עוטף עזה', shelterTime: 15, area: 1312, established: 1943 },
+    'כפר עזה': { zone: 'עוטף עזה', shelterTime: 15, area: 1313, established: 1951 },
+    'נחל עוז': { zone: 'עוטף עזה', shelterTime: 15, area: 1314, established: 1951 },
+    'אור הנר': { zone: 'עוטף עזה', shelterTime: 15, area: 1315, established: 1957 }
 };
+
 // מילון קיצורים וכינויים לערים
 const cityAliases = {
     'ת"א': 'תל אביב',
@@ -263,7 +291,7 @@ function calculateSimilarity(str1, str2) {
     return (longer.length - distance) / longer.length;
 }
 
-// זיהוי ערים משופר עם Fuzzy Matching
+// *** זיהוי ערים משופר עם Fuzzy Matching - מתוקן ***
 function getCityMatchesFromAlert(alertCities) {
     const matches = [];
     const alertCitiesLower = (alertCities || []).map(city => city.toLowerCase().trim());
@@ -274,6 +302,7 @@ function getCityMatchesFromAlert(alertCities) {
         // בדיקה מדוייקת
         if (alertCitiesLower.includes(ourCityLower)) {
             matches.push(ourCity);
+            formatLogMessage('debug', 'CityMatch', `התאמה מדוייקת: ${ourCity}`);
             return;
         }
         
@@ -282,28 +311,236 @@ function getCityMatchesFromAlert(alertCities) {
             if (typeof fullName === 'string' && fullName === ourCity) {
                 if (alertCitiesLower.includes(alias.toLowerCase())) {
                     matches.push(ourCity);
+                    formatLogMessage('debug', 'CityMatch', `התאמת קיצור: ${alias} -> ${ourCity}`);
                     return;
                 }
             } else if (Array.isArray(fullName) && fullName.includes(ourCity)) {
                 if (alertCitiesLower.includes(alias.toLowerCase())) {
                     matches.push(ourCity);
+                    formatLogMessage('debug', 'CityMatch', `התאמת קיצור (רשימה): ${alias} -> ${ourCity}`);
                     return;
                 }
             }
         }
         
-        // Fuzzy matching - דמיון חלקי
+        // בדיקה חלקית - אם אחד מכיל את השני
         for (const alertCity of alertCitiesLower) {
-            const similarity = calculateSimilarity(alertCity, ourCityLower);
-            if (similarity > 0.8) { // 80% דמיון
+            if (alertCity.includes(ourCityLower) || ourCityLower.includes(alertCity)) {
                 matches.push(ourCity);
-                formatLogMessage('debug', 'FuzzyMatch', `התאמה: ${alertCity} -> ${ourCity} (${Math.round(similarity * 100)}%)`);
+                formatLogMessage('debug', 'CityMatch', `התאמה חלקית: "${alertCity}" -> "${ourCity}"`);
+                break;
+            }
+            
+            // Fuzzy matching - דמיון חלקי
+            const similarity = calculateSimilarity(alertCity, ourCityLower);
+            if (similarity > 0.75) { // הורדתי ל-75% לגמישות יותר
+                matches.push(ourCity);
+                formatLogMessage('debug', 'CityMatch', `התאמת דמיון: "${alertCity}" -> "${ourCity}" (${Math.round(similarity * 100)}%)`);
                 break;
             }
         }
     });
     
+    // לוג התוצאות
+    if (matches.length > 0) {
+        formatLogMessage('success', 'CityMatch', `נמצאו ${matches.length} התאמות`, {
+            original: alertCities,
+            matched: matches
+        });
+    } else {
+        formatLogMessage('warning', 'CityMatch', 'לא נמצאו התאמות לערים', {
+            alertCities: alertCities
+        });
+    }
+    
     return [...new Set(matches)];
+}
+
+// *** מיפוי סוגי התראות מתוקן לפי המפרט הרשמי ***
+function mapAlertTypeFromKore(koreAlert) {
+    if (!koreAlert || !koreAlert.title) {
+        return {
+            type: 'safe',
+            title: 'מצב רגיל',
+            icon: '✅',
+            description: 'אין התראות פעילות כרגע',
+            severity: 'low',
+            class: 'safe'
+        };
+    }
+    
+    // מיפוי קטגוריות לפי המפרט הרשמי
+    const categoryMap = {
+        '1': 'missiles',        // רקטות וטילים  
+        '2': 'radiologicalEvent', // אירוע רדיולוגי
+        '3': 'earthQuake',      // רעידת אדמה
+        '4': 'tsunami',         // צונאמי
+        '5': 'hostileAircraftIntrusion', // חדירת כלי טיס
+        '6': 'newsFlash',       // התראה מוקדמת / יציאה מממ"ד !!! זה הקטע החשוב !!!
+        '7': 'hazardousMaterials', // חומרים מסוכנים
+        '8': 'terroristInfiltration', // הסתננות
+        '101': 'missilesDrill', // תרגיל טילים
+        '102': 'radiologicalEventDrill',
+        '103': 'earthQuakeDrill',
+        '104': 'tsunamiDrill',
+        '105': 'hostileAircraftIntrusionDrill',
+        '106': 'newsFlash', // תרגיל התראה מוקדמת
+        '107': 'hazardousMaterialsDrill',
+        '108': 'terroristInfiltrationDrill'
+    };
+    
+    const officialType = categoryMap[koreAlert.cat] || 'unknown';
+    const title = koreAlert.title.toLowerCase();
+    const desc = (koreAlert.desc || '').toLowerCase();
+    
+    formatLogMessage('debug', 'AlertMapping', 'מעבד התראה', {
+        category: koreAlert.cat,
+        officialType: officialType,
+        title: koreAlert.title,
+        desc: koreAlert.desc
+    });
+    
+    // לוגיקה מתוקנת לפי המפרט הרשמי
+    switch (officialType) {
+        case 'missiles':
+            return {
+                type: 'shelter',
+                title: 'היכנסו לממ"ד מיידית!',
+                icon: '🚨',
+                description: `${koreAlert.title} - ${koreAlert.desc || 'היכנסו לחדר המוגן עכשיו!'}`,
+                severity: 'high',
+                class: 'danger'
+            };
+            
+        case 'newsFlash':
+            // *** זה הקטע החשוב! newsFlash יכול להיות גם התראה מוקדמת וגם "בטוח לצאת" ***
+            // צריך לבדוק את התיאור כדי להבין מה זה
+            if (desc.includes('בטוח') || desc.includes('לצאת') || 
+                desc.includes('יציאה') || desc.includes('הסרת') || 
+                title.includes('יציאה') || title.includes('ביטול')) {
+                formatLogMessage('info', 'AlertMapping', 'זוהה כהתראת יציאה', { desc: koreAlert.desc });
+                return {
+                    type: 'all-clear',
+                    title: 'יציאה מהממ"ד',
+                    icon: '🟢',
+                    description: 'הסכנה חלפה תודה לאל - ניתן לצאת מהחדר המוגן',
+                    severity: 'low',
+                    class: 'safe'
+                };
+            } else if (desc.includes('היכנסו') || desc.includes('מרחב מוגן') || 
+                      desc.includes('ממ"ד') || desc.includes('מקלט')) {
+                formatLogMessage('info', 'AlertMapping', 'זוהה כהתראת כניסה לממ"ד', { desc: koreAlert.desc });
+                return {
+                    type: 'shelter',
+                    title: 'היכנסו לממ"ד מיידית!',
+                    icon: '🚨',
+                    description: `${koreAlert.title} - ${koreAlert.desc || 'היכנסו לחדר המוגן עכשיו!'}`,
+                    severity: 'high',
+                    class: 'danger'
+                };
+            } else {
+                formatLogMessage('info', 'AlertMapping', 'זוהה כהתראה מוקדמת', { desc: koreAlert.desc });
+                return {
+                    type: 'early-warning',
+                    title: 'התראה מוקדמת',
+                    icon: '⚠️',
+                    description: `${koreAlert.title} - ${koreAlert.desc || 'היו ערוכים ומוכנים'}`,
+                    severity: 'medium',
+                    class: 'warning'
+                };
+            }
+            
+        case 'radiologicalEvent':
+            return {
+                type: 'radiological',
+                title: 'אירוע רדיולוגי',
+                icon: '☢️',
+                description: `${koreAlert.title} - ${koreAlert.desc || 'הישארו בבתים, סגרו חלונות ודלתות'}`,
+                severity: 'high',
+                class: 'danger'
+            };
+            
+        case 'earthQuake':
+            return {
+                type: 'earthquake',
+                title: 'רעידת אדמה',
+                icon: '🌊',
+                description: `${koreAlert.title} - ${koreAlert.desc || 'צאו מהבניין במהירות אל שטח פתוח'}`,
+                severity: 'high',
+                class: 'danger'
+            };
+            
+        case 'tsunami':
+            return {
+                type: 'tsunami',
+                title: 'אזהרת צונאמי',
+                icon: '🌊',
+                description: `${koreAlert.title} - ${koreAlert.desc || 'התרחקו מהחוף מיידית אל מקום גבוה'}`,
+                severity: 'high',
+                class: 'danger'
+            };
+            
+        case 'hostileAircraftIntrusion':
+            return {
+                type: 'aircraft',
+                title: 'חדירת כלי טיס עויב',
+                icon: '✈️',
+                description: `${koreAlert.title} - ${koreAlert.desc || 'היכנסו לחדר המוגן'}`,
+                severity: 'high',
+                class: 'danger'
+            };
+            
+        case 'hazardousMaterials':
+            return {
+                type: 'hazmat',
+                title: 'חומרים מסוכנים',
+                icon: '☣️',
+                description: `${koreAlert.title} - ${koreAlert.desc || 'הישארו בבתים, סגרו מערכות אוורור'}`,
+                severity: 'high',
+                class: 'danger'
+            };
+            
+        case 'terroristInfiltration':
+            return {
+                type: 'terror',
+                title: 'הסתננות טרוריסטים',
+                icon: '🔒',
+                description: `${koreAlert.title} - ${koreAlert.desc || 'נעלו דלתות, הימנעו מיציאה מהבית'}`,
+                severity: 'high',
+                class: 'danger'
+            };
+            
+        // תרגילים
+        case 'missilesDrill':
+        case 'earthQuakeDrill':
+        case 'radiologicalEventDrill':
+        case 'tsunamiDrill':
+        case 'hostileAircraftIntrusionDrill':
+        case 'hazardousMaterialsDrill':
+        case 'terroristInfiltrationDrill':
+            return {
+                type: 'drill',
+                title: 'תרגיל',
+                icon: '🎯',
+                description: `${koreAlert.title} - ${koreAlert.desc || 'זהו תרגיל - פעלו לפי ההוראות'}`,
+                severity: 'medium',
+                class: 'warning'
+            };
+            
+        default:
+            formatLogMessage('warning', 'AlertMapping', 'סוג התראה לא מוכר', { 
+                category: koreAlert.cat, 
+                officialType: officialType 
+            });
+            return {
+                type: 'unknown',
+                title: 'התראה לא מוכרת',
+                icon: '❓',
+                description: `${koreAlert.title} - ${koreAlert.desc || `סוג התראה: ${officialType}`}`,
+                severity: 'medium',
+                class: 'warning'
+            };
+    }
 }
 
 // API Routes
@@ -465,60 +702,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// מיפוי סוגי התראות
-function mapAlertTypeFromKore(koreAlert) {
-    if (!koreAlert || !koreAlert.title) {
-        return {
-            type: 'safe',
-            title: 'מצב רגיל',
-            icon: '✅',
-            description: 'אין התראות פעילות כרגע',
-            severity: 'low',
-            class: 'safe'
-        };
-    }
-    
-    const title = koreAlert.title.toLowerCase();
-    
-    if (title.includes('רקטות') || title.includes('טילים') || title.includes('ירי') || title.includes('אזעקה')) {
-        return {
-            type: 'shelter',
-            title: 'היכנסו לממ"ד מיידית!',
-            icon: '🚨',
-            description: `${koreAlert.title} - ${koreAlert.desc || 'היכנסו לחדר המוגן עכשיו!'}`,
-            severity: 'high',
-            class: 'danger'
-        };
-    } else if (title.includes('התראה') || title.includes('חירום')) {
-        return {
-            type: 'early-warning',
-            title: 'התראה מוקדמת',
-            icon: '⚠️',
-            description: `${koreAlert.title} - ${koreAlert.desc || 'היו מוכנים'}`,
-            severity: 'medium',
-            class: 'warning'
-        };
-    } else if (title.includes('תרגיל')) {
-        return {
-            type: 'drill',
-            title: 'תרגיל',
-            icon: '🎯',
-            description: `${koreAlert.title} - ${koreAlert.desc || 'תרגיל בטחוני'}`,
-            severity: 'medium',
-            class: 'warning'
-        };
-    } else {
-        return {
-            type: 'all-clear',
-            title: 'יציאה מהממ"ד',
-            icon: '🟢',
-            description: 'הסכנה חלפה תודה לאל- ניתן לצאת מהחדר המוגן',
-            severity: 'low',
-            class: 'safe'
-        };
-    }
-}
-
 // פונקציות התראות
 function notifyRelevantUsers(alert) {
     if (!alert.cities || alert.cities.length === 0) {
@@ -593,7 +776,7 @@ async function checkKoreAPIWithCache() {
     }
 }
 
-// בדיקת API של כל רגע עם Health Monitoring
+// *** בדיקת API של כל רגע עם Health Monitoring - מתוקן ***
 async function checkKoreAPI() {
     try {
         formatLogMessage('debug', 'KoreAPI', 'בודק התראות ב-API של כל רגע');
@@ -614,6 +797,14 @@ async function checkKoreAPI() {
             if (lastAlertId !== alertData.id) {
                 lastAlertId = alertData.id;
                 
+                formatLogMessage('info', 'KoreAPI', 'התראה חדשה התקבלה', {
+                    id: alertData.id,
+                    cat: alertData.cat,
+                    title: alertData.title,
+                    desc: alertData.desc,
+                    data: alertData.data
+                });
+                
                 const categorized = mapAlertTypeFromKore(alertData);
                 const matchedCities = getCityMatchesFromAlert(alertData.data || []);
                 
@@ -627,9 +818,10 @@ async function checkKoreAPI() {
                     source: 'kore-api'
                 };
                 
-                formatLogMessage('success', 'KoreAPI', `התראה חדשה: ${enrichedAlert.type}`, {
+                formatLogMessage('success', 'KoreAPI', `התראה מעובדת: ${enrichedAlert.type}`, {
                     cities: enrichedAlert.cities,
-                    originalCities: enrichedAlert.originalCities
+                    originalCities: enrichedAlert.originalCities,
+                    mappedType: categorized.type
                 });
                 
                 lastAlert = enrichedAlert;
@@ -637,15 +829,17 @@ async function checkKoreAPI() {
                 notifyRelevantUsers(enrichedAlert);
                 
                 io.emit('global-status', {
-                    hasActiveAlert: true,
+                    hasActiveAlert: enrichedAlert.type !== 'safe' && enrichedAlert.type !== 'all-clear',
                     affectedAreas: enrichedAlert.cities || [],
                     lastUpdate: enrichedAlert.timestamp,
+                    alertType: enrichedAlert.type,
                     mode: 'live'
                 });
             }
             return true;
             
         } else {
+            // אין התראות פעילות
             if (lastAlert && lastAlert.type !== 'safe' && lastAlert.type !== 'all-clear') {
                 createAllClearAlert();
             }
@@ -703,9 +897,10 @@ async function checkPikudHaOrefAPI() {
                 notifyRelevantUsers(enrichedAlert);
                 
                 io.emit('global-status', {
-                    hasActiveAlert: true,
+                    hasActiveAlert: enrichedAlert.type !== 'safe' && enrichedAlert.type !== 'all-clear',
                     affectedAreas: enrichedAlert.cities || [],
                     lastUpdate: enrichedAlert.timestamp,
+                    alertType: enrichedAlert.type,
                     mode: 'live'
                 });
             }
@@ -725,22 +920,34 @@ async function checkPikudHaOrefAPI() {
     }
 }
 
-// יצירת התראת יציאה מממ"ד
+// *** יצירת התראת יציאה מממ"ד - מתוקן ***
 function createAllClearAlert() {
+    // בדיקה מתוקנת - רק אחרי התראות סכנה אמיתיות
+    if (!lastAlert || !['shelter', 'early-warning', 'radiological', 'earthquake', 
+                         'tsunami', 'aircraft', 'hazmat', 'terror'].includes(lastAlert.type)) {
+        formatLogMessage('debug', 'System', 'לא צריך ליצור התראת יציאה - לא היתה התראת סכנה', {
+            lastAlertType: lastAlert ? lastAlert.type : 'none'
+        });
+        return;
+    }
+    
     const allClearAlert = {
         type: 'all-clear',
         title: 'יציאה מהממ"ד',
         icon: '🟢',
-        description: 'הסכנה חלפה תודה לאל- ניתן לצאת מהחדר המוגן',
+        description: 'הסכנה חלפה תודה לאל - ניתן לצאת מהחדר המוגן',
         severity: 'low',
         class: 'safe',
         cities: lastAlert.cities || [],
         timestamp: new Date().toISOString(),
         hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-        source: 'system'
+        source: 'system-auto-clear'
     };
     
-    formatLogMessage('info', 'System', 'יוצר התראת יציאה מממ"ד');
+    formatLogMessage('info', 'System', 'יוצר התראת יציאה מממ"ד אחרי התראת סכנה', {
+        previousAlert: lastAlert.type,
+        cities: allClearAlert.cities
+    });
     
     lastAlert = allClearAlert;
     lastAlertId = null;
@@ -751,6 +958,7 @@ function createAllClearAlert() {
         hasActiveAlert: false,
         affectedAreas: [],
         lastUpdate: allClearAlert.timestamp,
+        alertType: 'all-clear',
         mode: 'live'
     });
 }
@@ -863,7 +1071,7 @@ app.get('/health', (req, res) => {
         alerts: alertHistory.length,
         timestamp: new Date().toISOString(),
         apis: 'kore.co.il, pikud-haoref',
-        version: '2.0.0'
+        version: '2.0.1-fixed'
     });
 });
 
@@ -968,6 +1176,7 @@ function startServer() {
         formatLogMessage('info', 'Server', `📚 היסטוריה: ${alertHistory.length} רשומות`);
         formatLogMessage('info', 'Server', `🛡️ אבטחה: Helmet, Compression, Rate Limiting`);
         formatLogMessage('info', 'Server', `⚡ תכונות: Cache, Health Monitoring, Fuzzy Matching`);
+        formatLogMessage('info', 'Server', `🔧 תיקונים: מיפוי תקין לפי המפרט הרשמי`);
         
         startAlertMonitoring();
         setupHeartbeat();
