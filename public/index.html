@@ -999,144 +999,274 @@
             }
         }
 
-        function initializeSocket() {
-            try {
-                console.log('🔌 מנסה להתחבר ל-Socket.IO...');
+        // function initializeSocket() {
+        //     try {
+        //         console.log('🔌 מנסה להתחבר ל-Socket.IO...');
                 
-                socket = io({
-                    autoConnect: true,
-                    reconnection: true,
-                    reconnectionDelay: 2000,
-                    reconnectionDelayMax: 10000,
-                    maxReconnectionAttempts: MAX_RETRY_COUNT,
-                    timeout: 20000,
-                    forceNew: false,
-                    transports: ['polling', 'websocket'],
-                    upgrade: true,
-                    rememberUpgrade: true
-                });
+        //         socket = io({
+        //             autoConnect: true,
+        //             reconnection: true,
+        //             reconnectionDelay: 2000,
+        //             reconnectionDelayMax: 10000,
+        //             maxReconnectionAttempts: MAX_RETRY_COUNT,
+        //             timeout: 20000,
+        //             forceNew: false,
+        //             transports: ['polling', 'websocket'],
+        //             upgrade: true,
+        //             rememberUpgrade: true
+        //         });
                 
-                socket.on('connect', () => {
-                    isConnected = true;
-                    connectionRetryCount = 0;
-                    updateConnectionStatus(true, `מחובר לשרת (${socket.io.engine.transport.name})`);
-                    showNotification('התחבר לשרת בהצלחה', 'success');
-                    console.log('✅ Connected to server successfully via:', socket.io.engine.transport.name);
+        //         socket.on('connect', () => {
+        //             isConnected = true;
+        //             connectionRetryCount = 0;
+        //             updateConnectionStatus(true, `מחובר לשרת (${socket.io.engine.transport.name})`);
+        //             showNotification('התחבר לשרת בהצלחה', 'success');
+        //             console.log('✅ Connected to server successfully via:', socket.io.engine.transport.name);
                     
-                    cityInput.disabled = false;
+        //             cityInput.disabled = false;
                     
-                    // בדיקת ping
-                    socket.emit('ping');
+        //             // בדיקת ping
+        //             socket.emit('ping');
                     
-                    // תיקון: אם יש עיר נבחרת, הפעל את כל התהליך מחדש
-                    if (currentCity) {
-                        console.log('🔄 מפעיל מחדש עיר אחרי חיבור:', currentCity);
-                        triggerCityRegistration(currentCity);
-                    }
-                });
+        //             // תיקון: אם יש עיר נבחרת, הפעל את כל התהליך מחדש
+        //             if (currentCity) {
+        //                 console.log('🔄 מפעיל מחדש עיר אחרי חיבור:', currentCity);
+        //                 triggerCityRegistration(currentCity);
+        //             }
+        //         });
 
-                socket.on('disconnect', (reason) => {
-                    isConnected = false;
-                    updateConnectionStatus(false, `לא מחובר: ${reason}`);
-                    updateApiStatus('error', 'אין חיבור לשרת');
-                    cityInput.disabled = true;
-                    showNotification(`התנתק מהשרת: ${reason}`, 'warning');
-                    console.log('❌ Disconnected from server:', reason);
-                });
+        //         socket.on('disconnect', (reason) => {
+        //             isConnected = false;
+        //             updateConnectionStatus(false, `לא מחובר: ${reason}`);
+        //             updateApiStatus('error', 'אין חיבור לשרת');
+        //             cityInput.disabled = true;
+        //             showNotification(`התנתק מהשרת: ${reason}`, 'warning');
+        //             console.log('❌ Disconnected from server:', reason);
+        //         });
 
-                socket.on('connect_error', (error) => {
-                    connectionRetryCount++;
-                    isConnected = false;
-                    updateConnectionStatus(false, `שגיאת חיבור ${connectionRetryCount}/${MAX_RETRY_COUNT}`);
-                    console.error('❌ Connection error:', error);
+        //         socket.on('connect_error', (error) => {
+        //             connectionRetryCount++;
+        //             isConnected = false;
+        //             updateConnectionStatus(false, `שגיאת חיבור ${connectionRetryCount}/${MAX_RETRY_COUNT}`);
+        //             console.error('❌ Connection error:', error);
                     
-                    if (connectionRetryCount >= MAX_RETRY_COUNT) {
-                        updateConnectionStatus(false, 'כשל בחיבור - נסה לרענן');
-                        showNotification('לא ניתן להתחבר לשרת - רענן את הדף', 'danger');
-                    }
-                });
+        //             if (connectionRetryCount >= MAX_RETRY_COUNT) {
+        //                 updateConnectionStatus(false, 'כשל בחיבור - נסה לרענן');
+        //                 showNotification('לא ניתן להתחבר לשרת - רענן את הדף', 'danger');
+        //             }
+        //         });
 
-                socket.on('reconnect', (attemptNumber) => {
-                    console.log('🔄 Reconnected after', attemptNumber, 'attempts');
-                    showNotification('התחבר מחדש לשרת', 'success');
-                });
+        //         socket.on('reconnect', (attemptNumber) => {
+        //             console.log('🔄 Reconnected after', attemptNumber, 'attempts');
+        //             showNotification('התחבר מחדש לשרת', 'success');
+        //         });
 
-                socket.on('connection-status', (data) => {
-                    console.log('📊 Connection status:', data);
-                    updateConnectionStatus(data.connected, data.message || (data.connected ? 'מחובר (Live)' : 'לא מחובר'));
-                });
+        //         socket.on('connection-status', (data) => {
+        //             console.log('📊 Connection status:', data);
+        //             updateConnectionStatus(data.connected, data.message || (data.connected ? 'מחובר (Live)' : 'לא מחובר'));
+        //         });
 
-                socket.on('registration-confirmed', (data) => {
-                    console.log('✅ רישום אושר:', data);
-                    showNotification(`נרשמת בהצלחה לעיר ${data.city}`, 'success');
-                });
+        //         socket.on('registration-confirmed', (data) => {
+        //             console.log('✅ רישום אושר:', data);
+        //             showNotification(`נרשמת בהצלחה לעיר ${data.city}`, 'success');
+        //         });
 
-                socket.on('registration-error', (data) => {
-                    console.error('❌ שגיאה ברישום:', data);
-                    showNotification(`שגיאה ברישום לעיר ${data.city}: ${data.error}`, 'danger');
-                });
+        //         socket.on('registration-error', (data) => {
+        //             console.error('❌ שגיאה ברישום:', data);
+        //             showNotification(`שגיאה ברישום לעיר ${data.city}: ${data.error}`, 'danger');
+        //         });
 
-                socket.on('pong', (data) => {
-                    console.log('🏓 Pong received:', data);
-                });
+        //         socket.on('pong', (data) => {
+        //             console.log('🏓 Pong received:', data);
+        //         });
 
-                socket.on('alert-update', (alert) => {
-                    console.log('📨 התראה התקבלה:', alert);
-                    handleAlertUpdate(alert);
-                });
+        //         socket.on('alert-update', (alert) => {
+        //             console.log('📨 התראה התקבלה:', alert);
+        //             handleAlertUpdate(alert);
+        //         });
 
-                socket.on('history-update', (history) => {
-                    console.log('📚 עדכון היסטוריה:', history.length, 'פריטים');
-                    alertHistory = history;
-                    renderHistory();
-                    historyLoading.style.display = 'none';
-                    refreshBtn.disabled = false;
-                });
+        //         socket.on('history-update', (history) => {
+        //             console.log('📚 עדכון היסטוריה:', history.length, 'פריטים');
+        //             alertHistory = history;
+        //             renderHistory();
+        //             historyLoading.style.display = 'none';
+        //             refreshBtn.disabled = false;
+        //         });
 
-                socket.on('global-status', (status) => {
-                    console.log('🌍 סטטוס גלובלי:', status);
-                });
+        //         socket.on('global-status', (status) => {
+        //             console.log('🌍 סטטוס גלובלי:', status);
+        //         });
 
-                socket.on('heartbeat', (data) => {
-                    updateConnectionStatus(true, `מחובר (${data.connectedUsers} משתמשים)`);
+        //         socket.on('heartbeat', (data) => {
+        //             updateConnectionStatus(true, `מחובר (${data.connectedUsers} משתמשים)`);
                     
-                    if (data.apiStatus) {
-                        const koreStatus = data.apiStatus.kore;
-                        const orefStatus = data.apiStatus.oref;
+        //             if (data.apiStatus) {
+        //                 const koreStatus = data.apiStatus.kore;
+        //                 const orefStatus = data.apiStatus.oref;
                         
-                        if (koreStatus === 'healthy' || orefStatus === 'healthy') {
-                            updateApiStatus('healthy', 'מקורות נתונים תקינים');
-                        } else if (koreStatus === 'degraded' || orefStatus === 'degraded') {
-                            updateApiStatus('degraded', 'בעיה חלקית במקורות נתונים');
-                        } else {
-                            updateApiStatus('error', 'בעיה במקורות נתונים');
-                        }
-                    }
-                });
+        //                 if (koreStatus === 'healthy' || orefStatus === 'healthy') {
+        //                     updateApiStatus('healthy', 'מקורות נתונים תקינים');
+        //                 } else if (koreStatus === 'degraded' || orefStatus === 'degraded') {
+        //                     updateApiStatus('degraded', 'בעיה חלקית במקורות נתונים');
+        //                 } else {
+        //                     updateApiStatus('error', 'בעיה במקורות נתונים');
+        //                 }
+        //             }
+        //         });
 
-                socket.on('server-shutdown', (data) => {
-                    showNotification(data.message, 'warning');
-                    updateConnectionStatus(false, 'השרת נסגר לתחזוקה');
-                });
+        //         socket.on('server-shutdown', (data) => {
+        //             showNotification(data.message, 'warning');
+        //             updateConnectionStatus(false, 'השרת נסגר לתחזוקה');
+        //         });
 
-                // Transport events for debugging
-                socket.io.on('upgrade', () => {
-                    console.log('⬆️ Upgraded to:', socket.io.engine.transport.name);
-                    updateConnectionStatus(true, `מחובר (${socket.io.engine.transport.name})`);
-                });
+        //         // Transport events for debugging
+        //         socket.io.on('upgrade', () => {
+        //             console.log('⬆️ Upgraded to:', socket.io.engine.transport.name);
+        //             updateConnectionStatus(true, `מחובר (${socket.io.engine.transport.name})`);
+        //         });
 
-                socket.io.on('upgradeError', (error) => {
-                    console.log('❌ Upgrade error:', error);
-                });
+        //         socket.io.on('upgradeError', (error) => {
+        //             console.log('❌ Upgrade error:', error);
+        //         });
 
-            } catch (error) {
-                console.error('❌ Failed to initialize socket:', error);
-                updateConnectionStatus(false, 'שגיאה בהתחברות');
-                updateApiStatus('error', 'שגיאה בחיבור');
-                showNotification('שגיאה בהתחברות לשרת', 'danger');
+        //     } catch (error) {
+        //         console.error('❌ Failed to initialize socket:', error);
+        //         updateConnectionStatus(false, 'שגיאה בהתחברות');
+        //         updateApiStatus('error', 'שגיאה בחיבור');
+        //         showNotification('שגיאה בהתחברות לשרת', 'danger');
+        //     }
+        // }
+// תיקון הגדרות Socket.IO בצד הלקוח (להחליף ב-index.html)
+function initializeSocket() {
+    try {
+        console.log('🔌 מנסה להתחבר ל-Socket.IO...');
+        
+        socket = io({
+            autoConnect: true,
+            reconnection: true,
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 10000,
+            maxReconnectionAttempts: MAX_RETRY_COUNT,
+            timeout: 20000,
+            forceNew: false,
+            transports: ['polling'], // ✅ רק polling - לא websocket
+            upgrade: false, // ✅ מנע שדרוג ל-websocket
+            rememberUpgrade: false,
+            path: '/socket.io/'
+        });
+        
+        socket.on('connect', () => {
+            isConnected = true;
+            connectionRetryCount = 0;
+            updateConnectionStatus(true, `מחובר לשרת (polling)`);
+            showNotification('התחבר לשרת בהצלחה', 'success');
+            console.log('✅ Connected to server successfully via polling');
+            
+            cityInput.disabled = false;
+            
+            // בדיקת ping
+            socket.emit('ping');
+            
+            // תיקון: אם יש עיר נבחרת, הפעל את כל התהליך מחדש
+            if (currentCity) {
+                console.log('🔄 מפעיל מחדש עיר אחרי חיבור:', currentCity);
+                triggerCityRegistration(currentCity);
             }
-        }
+        });
 
+        socket.on('disconnect', (reason) => {
+            isConnected = false;
+            updateConnectionStatus(false, `לא מחובר: ${reason}`);
+            updateApiStatus('error', 'אין חיבור לשרת');
+            cityInput.disabled = true;
+            showNotification(`התנתק מהשרת: ${reason}`, 'warning');
+            console.log('❌ Disconnected from server:', reason);
+        });
+
+        socket.on('connect_error', (error) => {
+            connectionRetryCount++;
+            isConnected = false;
+            updateConnectionStatus(false, `שגיאת חיבור ${connectionRetryCount}/${MAX_RETRY_COUNT}`);
+            console.error('❌ Connection error:', error);
+            
+            if (connectionRetryCount >= MAX_RETRY_COUNT) {
+                updateConnectionStatus(false, 'כשל בחיבור - נסה לרענן');
+                showNotification('לא ניתן להתחבר לשרת - רענן את הדף', 'danger');
+            }
+        });
+
+        socket.on('reconnect', (attemptNumber) => {
+            console.log('🔄 Reconnected after', attemptNumber, 'attempts');
+            showNotification('התחבר מחדש לשרת', 'success');
+        });
+
+        socket.on('connection-status', (data) => {
+            console.log('📊 Connection status:', data);
+            updateConnectionStatus(data.connected, data.message || (data.connected ? 'מחובר (Live)' : 'לא מחובר'));
+        });
+
+        socket.on('registration-confirmed', (data) => {
+            console.log('✅ רישום אושר:', data);
+            showNotification(`נרשמת בהצלחה לעיר ${data.city}`, 'success');
+        });
+
+        socket.on('registration-error', (data) => {
+            console.error('❌ שגיאה ברישום:', data);
+            showNotification(`שגיאה ברישום לעיר ${data.city}: ${data.error}`, 'danger');
+        });
+
+        socket.on('pong', (data) => {
+            console.log('🏓 Pong received:', data);
+        });
+
+        socket.on('alert-update', (alert) => {
+            console.log('📨 התראה התקבלה:', alert);
+            handleAlertUpdate(alert);
+        });
+
+        socket.on('history-update', (history) => {
+            console.log('📚 עדכון היסטוריה:', history.length, 'פריטים');
+            alertHistory = history;
+            renderHistory();
+            historyLoading.style.display = 'none';
+            refreshBtn.disabled = false;
+        });
+
+        socket.on('global-status', (status) => {
+            console.log('🌍 סטטוס גלובלי:', status);
+        });
+
+        socket.on('heartbeat', (data) => {
+            updateConnectionStatus(true, `מחובר (${data.connectedUsers} משתמשים)`);
+            
+            if (data.apiStatus) {
+                const koreStatus = data.apiStatus.kore;
+                const orefStatus = data.apiStatus.oref_official;
+                
+                if (koreStatus === 'healthy' || orefStatus === 'healthy') {
+                    updateApiStatus('healthy', 'מקורות נתונים תקינים');
+                } else if (koreStatus === 'degraded' || orefStatus === 'degraded') {
+                    updateApiStatus('degraded', 'בעיה חלקית במקורות נתונים');
+                } else {
+                    updateApiStatus('error', 'בעיה במקורות נתונים');
+                }
+            }
+        });
+
+        socket.on('server-shutdown', (data) => {
+            showNotification(data.message, 'warning');
+            updateConnectionStatus(false, 'השרת נסגר לתחזוקה');
+        });
+
+        // ✅ הוסרו transport events כי אנחנו רק ב-polling
+        
+    } catch (error) {
+        console.error('❌ Failed to initialize socket:', error);
+        updateConnectionStatus(false, 'שגיאה בהתחברות');
+        updateApiStatus('error', 'שגיאה בחיבור');
+        showNotification('שגיאה בהתחברות לשרת', 'danger');
+    }
+}
         async function loadCities() {
             try {
                 const response = await fetch('/api/cities');
