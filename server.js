@@ -784,7 +784,7 @@ app.get('/api/health/detailed', (req, res) => {
     });
 });
 
-// WebSocket חיבורים
+// WebSocket חיבורים - גרסה מתוקנת
 io.on('connection', (socket) => {
     formatLogMessage('info', 'WebSocket', `משתמש חדש התחבר: ${socket.id}`);
     
@@ -796,29 +796,77 @@ io.on('connection', (socket) => {
     
     socket.on('register-city', (cityName) => {
         formatLogMessage('info', 'Registration', `🏙️ משתמש ${socket.id} נרשם לעיר: ${cityName}`);
+        
+        // *** כאן קורא לפונקציה! ***
+        const alertRelevance = clearOldAlertsForCity(cityName);
+        
+        // שמור נתוני המשתמש
         connectedUsers.set(socket.id, { 
             cityName, 
             connectedAt: new Date(),
             lastSeen: new Date()
         });
         
-        if (lastAlert) {
+        // *** בדיקה קפדנית: שלח התראה רק אם היא רלוונטית לעיר ***
+        if (lastAlert && alertRelevance === true) {
+            formatLogMessage('info', 'Registration', `שולח התראה רלוונטית למשתמש חדש`, {
+                alertType: lastAlert.type,
+                city: cityName
+            });
             socket.emit('alert-update', lastAlert);
+        } else {
+            formatLogMessage('info', 'Registration', `שולח מצב בטוח למשתמש חדש`, {
+                city: cityName,
+                reason: alertRelevance === false ? 'התראה לא רלוונטית' : 'אין התראה פעילה'
+            });
+            sendSafeAlertToUser(socket, cityName);
         }
         
+        // שלח היסטוריה רלוונטית בלבד
         const cityHistory = alertHistory.filter(alert => 
             !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
         ).slice(0, 20);
         
         socket.emit('history-update', cityHistory);
+        
+        formatLogMessage('success', 'Registration', `רישום הושלם עבור ${cityName}`, {
+            historyItems: cityHistory.length
+        });
     });
     
     socket.on('get-history', (cityName) => {
+        formatLogMessage('debug', 'History', `בקשת היסטוריה עבור ${cityName}`);
+        
         const cityHistory = alertHistory.filter(alert => 
             !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
         ).slice(0, 20);
         
         socket.emit('history-update', cityHistory);
+        
+        formatLogMessage('success', 'History', `נשלחה היסטוריה עבור ${cityName}`, {
+            items: cityHistory.length
+        });
+    });
+    
+    // אירוע חדש לבקשת התראות ספציפיות לעיר
+    socket.on('request-city-specific-alerts', (cityName) => {
+        formatLogMessage('debug', 'CitySpecific', `בקשה להתראות ספציפיות עבור ${cityName}`);
+        
+        // *** קרא לפונקציה גם כאן ***
+        const alertRelevance = clearOldAlertsForCity(cityName);
+        
+        if (lastAlert && alertRelevance === true) {
+            socket.emit('alert-update', lastAlert);
+            formatLogMessage('info', 'CitySpecific', `נשלחה התראה רלוונטית`, {
+                alertType: lastAlert.type,
+                city: cityName
+            });
+        } else {
+            sendSafeAlertToUser(socket, cityName);
+            formatLogMessage('info', 'CitySpecific', `נשלח מצב בטוח`, {
+                city: cityName
+            });
+        }
     });
     
     socket.on('disconnect', () => {
@@ -826,6 +874,56 @@ io.on('connection', (socket) => {
         connectedUsers.delete(socket.id);
     });
 });
+
+// *** פונקציה מתוקנת לניקוי התראות ישנות ***
+function clearOldAlertsForCity(cityName) {
+    formatLogMessage('debug', 'AlertClear', `🧹 מנקה התראות ישנות עבור ${cityName}`);
+    
+    // אם יש התראה פעילה שלא רלוונטית לעיר הזו - סמן שזה לא רלוונטי
+    if (lastAlert && lastAlert.cities && lastAlert.cities.length > 0) {
+        const isRelevant = lastAlert.cities.includes(cityName);
+        if (!isRelevant) {
+            formatLogMessage('info', 'AlertClear', `התראה פעילה לא רלוונטית לעיר ${cityName}`, {
+                alertCities: lastAlert.cities,
+                alertType: lastAlert.type,
+                shouldClearForThisCity: true
+            });
+            return false; // מחזיר שהתראה לא רלוונטית
+        } else {
+            formatLogMessage('info', 'AlertClear', `התראה פעילה רלוונטית לעיר ${cityName}`, {
+                alertCities: lastAlert.cities,
+                alertType: lastAlert.type
+            });
+            return true; // מחזיר שהתראה רלוונטית
+        }
+    }
+    
+    formatLogMessage('debug', 'AlertClear', `אין התראה פעילה עבור ${cityName}`);
+    return null; // אין התראה
+}
+
+// *** פונקציה חדשה לשליחת מצב בטוח ***
+function sendSafeAlertToUser(socket, cityName) {
+    const safeAlert = {
+        type: 'safe',
+        title: 'מצב רגיל',
+        icon: '✅',
+        description: 'אין התראות פעילות באזור שלך',
+        severity: 'low',
+        class: 'safe',
+        cities: [cityName],
+        timestamp: new Date().toISOString(),
+        hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
+        source: 'system-safe-for-city'
+    };
+    
+    socket.emit('alert-update', safeAlert);
+    
+    formatLogMessage('debug', 'SafeAlert', `נשלח מצב בטוח למשתמש`, {
+        city: cityName,
+        socketId: socket.id.substring(0, 8)
+    });
+}
 
 // *** פונקציית התראות מתוקנת - תיקון חמור לבעיית השליחה לכולם ***
 function notifyRelevantUsers(alert) {
