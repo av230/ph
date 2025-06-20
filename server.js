@@ -1,4 +1,6 @@
 
+// נתוני ערים מעודכנים - רשימה מלאה ומעודכנת
+// server.js - מערכת התראות חכמה עם תיקונים מלאים - גרסה 3.0
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -11,8 +13,6 @@ const compression = require('compression');
 
 const app = express();
 const server = http.createServer(app);
-
-// ✅ תיקון Socket.IO - רק polling עבור Render
 const io = socketIo(server, {
     cors: {
         origin: "*",
@@ -21,18 +21,12 @@ const io = socketIo(server, {
         credentials: false
     },
     allowEIO3: true,
-    transports: ['polling'], // ✅ רק polling, לא websocket
+    transports: ['polling', 'websocket'],
     pingTimeout: 60000,
-    pingInterval: 25000,
-    path: '/socket.io/',
-    serveClient: false,
-    maxHttpBufferSize: 1e6,
-    connectTimeout: 45000
+    pingInterval: 25000
 });
 
 const PORT = process.env.PORT || 3000;
-
-// נתוני ערים מעודכנים - רשימה מלאה ומעודכנת (כמו שהיה)
 const cityData = {
     'אבו גוש': { zone: 'ירושלים', shelterTime: 90, area: 203, established: 1994 },
     'אבן יהודה': { zone: 'שרון', shelterTime: 90, area: 1083, established: 1932 },
@@ -276,6 +270,8 @@ const cityData = {
     'גבעת זאב': { zone: 'ירושלים', shelterTime: 90, area: 204, established: 1983 },
     'מעלה עדומים': { zone: 'ירושלים', shelterTime: 90, area: 205, established: 1975 },
     'פסגת זאב': { zone: 'ירושלים', shelterTime: 90, area: 206, established: 1985 },
+    'גבעת שמואל': { zone: 'דן', shelterTime: 90, area: 117, established: 1942 },
+    'חולון': { zone: 'דן', shelterTime: 90, area: 108, established: 1935 },
     'כפר מנדא': { zone: 'גליל תחתון', shelterTime: 60, area: 409, established: 1800 },
     'מגדל העמק': { zone: 'עמק יזרעאל', shelterTime: 60, area: 88, established: 1952 },
     'ראש פינה': { zone: 'גליל עליון', shelterTime: 30, area: 151, established: 1882 },
@@ -287,6 +283,7 @@ const cityData = {
     "ג'ת": { zone: 'משולש', shelterTime: 90, area: 413, established: 1886 },
     'באקה אל גרביה': { zone: 'משולש', shelterTime: 90, area: 414, established: 1400 },
     'ועדי עארה': { zone: 'משולש', shelterTime: 90, area: 415, established: 1967 },
+    'מעיליא': { zone: 'גליל עליון', shelterTime: 15, area: 153, established: 1963 },
     'קריית ארבע': { zone: 'גוש עציון', shelterTime: 90, area: 309, established: 1968 },
     'כוכב יאיר': { zone: 'דן', shelterTime: 90, area: 118, established: 1981 },
     'כפר ורדים': { zone: 'גליל עליון', shelterTime: 30, area: 154, established: 1979 },
@@ -305,6 +302,7 @@ const cityData = {
     'יפתח': { zone: 'גליל עליון', shelterTime: 15, area: 167, established: 1950 },
     'עין קיניא': { zone: 'גליל עליון', shelterTime: 15, area: 168, established: 1964 },
     'משמר הירדן': { zone: 'בקעת הירדן', shelterTime: 60, area: 169, established: 1890 },
+    'יסוד המעלה': { zone: 'גליל עליון', shelterTime: 30, area: 170, established: 1883 },
     'כפר גלעדי': { zone: 'גליל עליון', shelterTime: 15, area: 171, established: 1949 },
     'הזורעים': { zone: 'גליל עליון', shelterTime: 30, area: 172, established: 1948 },
     'שושנת העמקים': { zone: 'גליל עליון', shelterTime: 30, area: 173, established: 1948 },
@@ -347,43 +345,32 @@ let lastAlertId = null;
 let connectedUsers = new Map();
 let isLiveMode = true;
 
-// Cache ו-Health Monitoring מעודכן
+// Cache ו-Health Monitoring
 const alertCache = new Map();
-const CACHE_DURATION = 5000; // 5 שניות - לפי פיקוד העורף
+const CACHE_DURATION = 30000; // 30 שניות
 let apiHealthStatus = {
     kore: { lastSuccess: null, failures: 0 },
-    oref: { lastSuccess: null, failures: 0 },
-    oref_official: { lastSuccess: null, failures: 0 } // API רשמי חדש
+    oref: { lastSuccess: null, failures: 0 }
 };
-
-// משתנה למניעת כפילויות
-let processedAlertIds = new Set();
-const ALERT_ID_RETENTION = 300000; // 5 דקות
-
-// ניקוי IDs ישנים כל דקה
-setInterval(() => {
-    if (processedAlertIds.size > 100) {
-        processedAlertIds.clear();
-        formatLogMessage('debug', 'Cache', 'ניקוי cache של IDs ישנים');
-    }
-}, 60000);
 
 // Rate Limiting
 const requestCounts = new Map();
 const RATE_LIMIT_WINDOW = 60000; // דקה
 const MAX_REQUESTS_PER_WINDOW = 100;
 
+
+
 // Middleware מתקדם עם CSP מתוקן לתמיכה ב-Socket.IO
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-            connectSrc: ["'self'", "wss:", "ws:", "https:", "*"],
-            imgSrc: ["'self'", "data:", "https:"],
-            fontSrc: ["'self'", "https:", "data:"],
-            mediaSrc: ["'self'", "data:", "blob:"],
+          defaultSrc: ["'self'", "netfree.link"],
+            styleSrc: ["'self'", "'unsafe-inline'", "netfree.link"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "netfree.link"],
+            connectSrc: ["'self'", "wss:", "ws:", "https:", "netfree.link"],
+            imgSrc: ["'self'", "data:", "https:", "netfree.link"],
+            fontSrc: ["'self'", "https:", "data:", "netfree.link"],
+            mediaSrc: ["'self'", "data:", "blob:", "netfree.link"],
             objectSrc: ["'none'"],
             baseUri: ["'self'"],
             formAction: ["'self'"],
@@ -770,535 +757,83 @@ function mapAlertTypeFromKore(koreAlert) {
     }
 }
 
-// ✅ בדיקת API רשמי של פיקוד העורף - מתוקן עם headers נכונים
-async function checkOfficialOrefAPI() {
+// API Routes
+app.get('/api/cities', (req, res) => {
     try {
-        formatLogMessage('debug', 'OrefOfficial', 'בודק API רשמי של פיקוד העורף');
-        
-        const response = await axios.get('https://www.oref.org.il/WarningMessages/alert/alerts.json', {
-            timeout: 8000,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Referer': 'https://www.oref.org.il/', // ✅ חובה!
-                'X-Requested-With': 'XMLHttpRequest', // ✅ חובה!
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'Sec-Fetch-Dest': 'empty',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin'
-            }
-        });
-        
-        const alertData = response.data;
-        apiHealthStatus.oref_official.lastSuccess = Date.now();
-        apiHealthStatus.oref_official.failures = 0;
-        
-        formatLogMessage('debug', 'OrefOfficial', 'תגובה מהשרת הרשמי', {
-            dataType: typeof alertData,
-            hasData: alertData && alertData.length > 0,
-            dataLength: alertData ? alertData.length : 0
-        });
-        
-        if (alertData && Array.isArray(alertData) && alertData.length > 0) {
-            // יש התראות פעילות
-            for (const alert of alertData) {
-                const alertId = `oref_${JSON.stringify(alert.data || alert.cities || [])}_${Date.now()}`;
-                
-                // בדיקת כפילויות
-                if (processedAlertIds.has(alertId)) {
-                    formatLogMessage('debug', 'OrefOfficial', 'התראה כפולה - מתעלם', { alertId });
-                    continue;
-                }
-                
-                processedAlertIds.add(alertId);
-                
-                formatLogMessage('info', 'OrefOfficial', '🚨 התראה רשמית חדשה התקבלה!', {
-                    alertId: alertId,
-                    data: alert.data,
-                    desc: alert.desc,
-                    cat: alert.cat,
-                    title: alert.title
-                });
-                
-                const categorized = mapAlertTypeFromKore({
-                    title: alert.title || 'התראה',
-                    desc: alert.desc || '',
-                    cat: alert.cat
-                });
-                
-                const matchedCities = getCityMatchesFromAlert(alert.data || alert.cities || []);
-                
-                const enrichedAlert = {
-                    id: alertId,
-                    ...alert,
-                    ...categorized,
-                    cities: matchedCities.length > 0 ? matchedCities : (alert.data || alert.cities || []),
-                    originalCities: alert.data || alert.cities || [],
-                    timestamp: new Date().toISOString(),
-                    hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-                    source: 'pikud-haoref-official'
-                };
-                
-                formatLogMessage('success', 'OrefOfficial', `✅ התראה רשמית מעובדת: ${enrichedAlert.type}`, {
-                    cities: enrichedAlert.cities,
-                    alertType: enrichedAlert.type
-                });
-                
-                lastAlert = enrichedAlert;
-                lastAlertId = alertId;
-                saveToHistory(enrichedAlert);
-                notifyRelevantUsers(enrichedAlert);
-                
-                io.emit('global-status', {
-                    hasActiveAlert: enrichedAlert.type !== 'safe' && enrichedAlert.type !== 'all-clear',
-                    affectedAreas: enrichedAlert.cities || [],
-                    lastUpdate: enrichedAlert.timestamp,
-                    alertType: enrichedAlert.type,
-                    mode: 'live-official'
-                });
-            }
-            return true;
-            
-        } else {
-            // אין התראות פעילות
-            if (lastAlert && lastAlert.type !== 'safe' && lastAlert.type !== 'all-clear') {
-                formatLogMessage('info', 'OrefOfficial', '🟢 אין התראות פעילות - יוצר התראת יציאה');
-                createAllClearAlert();
-            }
-            return false;
-        }
-        
+        const cities = Object.keys(cityData).sort();
+        res.json(cities);
+        formatLogMessage('success', 'API', `נשלחו ${cities.length} ערים`);
     } catch (error) {
-        apiHealthStatus.oref_official.failures++;
-        formatLogMessage('error', 'OrefOfficial', `❌ כשל ${apiHealthStatus.oref_official.failures} ב-API הרשמי`, error.message);
-        throw error;
+        formatLogMessage('error', 'API', 'שגיאה בטעינת ערים', error.message);
+        res.status(500).json({ error: 'שגיאה בטעינת ערים' });
     }
-}
+});
 
-// ✅ בדיקת API של kore.co.il - מתוקן
-async function checkKoreAPI() {
-    try {
-        formatLogMessage('debug', 'KoreAPI', 'בודק התראות ב-API של כל רגע');
-        
-        const response = await axios.get('https://www.kore.co.il/redAlert.json', {
-            timeout: 10000,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8',
-                'Cache-Control': 'no-cache'
-            }
-        });
-        
-        const alertData = response.data;
-        apiHealthStatus.kore.lastSuccess = Date.now();
-        apiHealthStatus.kore.failures = 0;
-        
-        formatLogMessage('debug', 'KoreAPI', 'תשובה מ-kore.co.il', {
-            hasId: !!alertData.id,
-            alertId: alertData.id,
-            cat: alertData.cat,
-            title: alertData.title,
-            dataLength: alertData.data ? alertData.data.length : 0
-        });
-        
-        // kore מחזיר אובייקט עם id כאשר יש התראה
-        // ואובייקט ריק או בלי id כאשר אין התראות
-        if (alertData && alertData.id) {
-            const uniqueAlertId = `kore_${alertData.id}`;
-            
-            if (lastAlertId !== uniqueAlertId) {
-                lastAlertId = uniqueAlertId;
-                
-                formatLogMessage('info', 'KoreAPI', '📥 התראה חדשה התקבלה מ-kore', {
-                    id: alertData.id,
-                    cat: alertData.cat,
-                    title: alertData.title,
-                    desc: alertData.desc,
-                    citiesCount: alertData.data?.length || 0
-                });
-                
-                const categorized = mapAlertTypeFromKore(alertData);
-                const matchedCities = getCityMatchesFromAlert(alertData.data || []);
-                
-                const enrichedAlert = {
-                    ...alertData,
-                    ...categorized,
-                    cities: matchedCities.length > 0 ? matchedCities : alertData.data,
-                    originalCities: alertData.data,
-                    timestamp: new Date().toISOString(),
-                    hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-                    source: 'kore-api'
-                };
-                
-                formatLogMessage('success', 'KoreAPI', `✅ התראה מעובדת מ-kore: ${enrichedAlert.type}`, {
-                    originalCitiesCount: enrichedAlert.originalCities?.length || 0,
-                    matchedCitiesCount: enrichedAlert.cities?.length || 0,
-                    mappedType: categorized.type,
-                    category: alertData.cat
-                });
-                
-                lastAlert = enrichedAlert;
-                saveToHistory(enrichedAlert);
-                notifyRelevantUsers(enrichedAlert);
-                
-                io.emit('global-status', {
-                    hasActiveAlert: enrichedAlert.type !== 'safe' && enrichedAlert.type !== 'all-clear',
-                    affectedAreas: enrichedAlert.cities || [],
-                    lastUpdate: enrichedAlert.timestamp,
-                    alertType: enrichedAlert.type,
-                    mode: 'live'
-                });
-            }
-            return true;
-            
-        } else {
-            formatLogMessage('debug', 'KoreAPI', '🟢 אין התראות פעילות ב-kore');
-            
-            if (lastAlert && lastAlert.type !== 'safe' && lastAlert.type !== 'all-clear') {
-                createAllClearAlert();
-            }
-            return false;
-        }
-        
-    } catch (error) {
-        apiHealthStatus.kore.failures++;
-        formatLogMessage('error', 'KoreAPI', `❌ כשל ${apiHealthStatus.kore.failures} ב-kore`, error.message);
-        throw error;
+app.get('/api/city/:name', (req, res) => {
+    const cityName = decodeURIComponent(req.params.name);
+    const city = cityData[cityName];
+    if (city) {
+        res.json({ name: cityName, ...city });
+    } else {
+        res.status(404).json({ error: 'עיר לא נמצאה' });
     }
-}
+});
 
-// בדיקת API של פיקוד העורף - הישן
-async function checkPikudHaOrefAPI() {
-    try {
-        formatLogMessage('debug', 'OrefAPI', 'בודק API ישן של פיקוד העורף');
-        
-        const response = await axios.get('https://www.oref.org.il/WarningMessages/alerts.json', {
-            timeout: 10000,
-            headers: {
-                'User-Agent': 'AlertSystem/3.0',
-                'Accept': 'application/json'
-            }
-        });
-        
-        const alertData = response.data;
-        apiHealthStatus.oref.lastSuccess = Date.now();
-        apiHealthStatus.oref.failures = 0;
-        
-        if (alertData && alertData.data && alertData.data.length > 0) {
-            const alert = alertData.data[0];
-            const alertId = `oref_old_${alert.id || Date.now()}`;
-            
-            if (!processedAlertIds.has(alertId)) {
-                processedAlertIds.add(alertId);
-                
-                const categorized = mapAlertTypeFromKore({ title: alert.title, desc: alert.message });
-                const matchedCities = getCityMatchesFromAlert(alert.cities || []);
-                
-                const enrichedAlert = {
-                    id: alertId,
-                    ...alert,
-                    ...categorized,
-                    cities: matchedCities.length > 0 ? matchedCities : alert.cities,
-                    originalCities: alert.cities,
-                    timestamp: new Date().toISOString(),
-                    hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-                    source: 'pikud-haoref-old'
-                };
-                
-                formatLogMessage('success', 'OrefAPI', `התראה מ-API ישן: ${enrichedAlert.type}`, {
-                    cities: enrichedAlert.cities
-                });
-                
-                lastAlert = enrichedAlert;
-                lastAlertId = alertId;
-                saveToHistory(enrichedAlert);
-                notifyRelevantUsers(enrichedAlert);
-                
-                io.emit('global-status', {
-                    hasActiveAlert: enrichedAlert.type !== 'safe' && enrichedAlert.type !== 'all-clear',
-                    affectedAreas: enrichedAlert.cities || [],
-                    lastUpdate: enrichedAlert.timestamp,
-                    alertType: enrichedAlert.type,
-                    mode: 'live'
-                });
-            }
-            return true;
-            
-        } else {
-            if (lastAlert && lastAlert.type !== 'safe' && lastAlert.type !== 'all-clear') {
-                createAllClearAlert();
-            }
-            return false;
-        }
-        
-    } catch (error) {
-        apiHealthStatus.oref.failures++;
-        formatLogMessage('error', 'OrefAPI', `כשל ${apiHealthStatus.oref.failures}`, error.message);
-        throw error;
-    }
-}
-
-function createAllClearAlert() {
-    if (!lastAlert || !['shelter', 'early-warning', 'radiological', 'earthquake', 
-                         'tsunami', 'aircraft', 'hazmat', 'terror'].includes(lastAlert.type)) {
-        formatLogMessage('debug', 'System', 'לא צריך ליצור התראת יציאה - לא היתה התראת סכנה', {
-            lastAlertType: lastAlert ? lastAlert.type : 'none'
-        });
-        return;
-    }
-    
-    const allClearAlert = {
-        type: 'all-clear',
-        title: 'יציאה מהממ"ד',
-        icon: '🟢',
-        description: 'הסכנה חלפה תודה לאל - ניתן לצאת מהחדר המוגן',
-        severity: 'low',
-        class: 'safe',
-        cities: lastAlert.cities || [],
+app.get('/api/alerts/current', (req, res) => {
+    res.json({ 
+        alert: lastAlert,
         timestamp: new Date().toISOString(),
-        hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-        source: 'system-auto-clear'
-    };
-    
-    formatLogMessage('info', 'System', 'יוצר התראת יציאה מממ"ד אחרי התראת סכנה', {
-        previousAlert: lastAlert.type,
-        cities: allClearAlert.cities
+        mode: isLiveMode ? 'live' : 'simulation'
     });
-    
-    lastAlert = allClearAlert;
-    lastAlertId = null;
-    saveToHistory(allClearAlert);
-    notifyRelevantUsers(allClearAlert);
-    
-    io.emit('global-status', {
-        hasActiveAlert: false,
-        affectedAreas: [],
-        lastUpdate: allClearAlert.timestamp,
-        alertType: 'all-clear',
-        mode: 'live'
-    });
-}
+});
 
-// ✅ מעקב אחר התראות משופר עם fallback חכם
-function startAlertMonitoring() {
-    formatLogMessage('info', 'Monitor', 'מתחיל מעקב מתקדם אחר התראות עם fallback חכם');
+app.get('/api/alerts/history/:city?', async (req, res) => {
+    const city = req.params.city ? decodeURIComponent(req.params.city) : null;
     
-    let consecutiveFailures = 0;
-    const MAX_CONSECUTIVE_FAILURES = 3;
-    
-    const monitorAlerts = async () => {
-        let alertFound = false;
-        let apiWorked = false;
-        
+    if (city) {
         try {
-            // סדר העדיפות: 1. פיקוד העורף הרשמי (הכי מהימן)
-            try {
-                formatLogMessage('debug', 'Monitor', '🎯 בודק פיקוד העורף הרשמי (עדיפות ראשונה)');
-                alertFound = await checkOfficialOrefAPI();
-                apiWorked = true;
-                consecutiveFailures = 0; // איפוס מונה כשלונות
-                
-                if (alertFound) {
-                    formatLogMessage('success', 'Monitor', '✅ התראה נמצאה ב-API הרשמי');
-                    return; // מצאנו התראה - לא צריך לבדוק מקורות נוספים
-                }
-            } catch (error) {
-                formatLogMessage('warning', 'Monitor', '⚠️ API רשמי נכשל, עובר למקור גיבוי', error.message);
-            }
+            formatLogMessage('info', 'History', `טוען היסטוריה עבור ${city}`);
             
-            // אם לא נמצא/נכשל ב-API הרשמי, בדוק את kore.co.il
-            if (!alertFound && !apiWorked) {
-                try {
-                    formatLogMessage('debug', 'Monitor', '🔄 בודק kore.co.il (מקור גיבוי ראשון)');
-                    alertFound = await checkKoreAPIWithCache();
-                    apiWorked = true;
-                    consecutiveFailures = 0;
-                    
-                    if (alertFound) {
-                        formatLogMessage('success', 'Monitor', '✅ התראה נמצאה ב-kore.co.il');
-                        return;
-                    }
-                } catch (error) {
-                    formatLogMessage('warning', 'Monitor', '⚠️ Kore API נכשל, עובר ל-API ישן', error.message);
-                }
-            }
+            const response = await axios.get(
+                `https://alerts-history.oref.org.il/Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1&city_0=${encodeURIComponent(city)}`, 
+                { timeout: 10000 }
+            );
             
-            // אם גם זה נכשל, בדוק API ישן של פיקוד העורף
-            if (!alertFound && !apiWorked) {
-                try {
-                    formatLogMessage('debug', 'Monitor', '🔄 בודק API ישן של פיקוד העורף (מקור אחרון)');
-                    alertFound = await checkPikudHaOrefAPI();
-                    apiWorked = true;
-                    consecutiveFailures = 0;
-                    
-                    if (alertFound) {
-                        formatLogMessage('success', 'Monitor', '✅ התראה נמצאה ב-API ישן');
-                        return;
-                    }
-                } catch (error) {
-                    formatLogMessage('error', 'Monitor', '❌ API ישן נכשל גם כן', error.message);
-                }
-            }
+            const history = response.data.map(alert => ({
+                ...mapAlertTypeFromKore({ title: alert.message, desc: alert.message }),
+                time: alert.time,
+                cities: [city],
+                timestamp: new Date().toISOString(),
+                hebrewTime: alert.time
+            }));
             
-            // אם אף API לא עבד
-            if (!apiWorked) {
-                consecutiveFailures++;
-                formatLogMessage('error', 'Monitor', `❌ כל ה-APIs נכשלו ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}`);
-                
-                if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                    formatLogMessage('error', 'Monitor', '🚨 מספר כשלונות רצופים - מאריך זמן בדיקה');
-                    setTimeout(monitorAlerts, 15000); // 15 שניות במקום 3
-                    return;
-                }
-            } else {
-                // לפחות API אחד עבד אבל לא נמצאו התראות
-                formatLogMessage('debug', 'Monitor', '✅ מקורות נתונים תקינים - אין התראות פעילות');
-            }
-            
-            isLiveMode = true;
+            formatLogMessage('success', 'History', `נטענו ${history.length} רשומות עבור ${city}`);
+            res.json(history.slice(0, 50));
             
         } catch (error) {
-            consecutiveFailures++;
-            formatLogMessage('error', 'Monitor', 'שגיאה כללית במעקב', error.message);
+            formatLogMessage('error', 'History', `שגיאה בטעינת היסטוריה עבור ${city}`, error.message);
+            
+            const localHistory = alertHistory.filter(alert => 
+                !alert.cities || alert.cities.length === 0 || alert.cities.includes(city)
+            ).slice(0, 50);
+            
+            res.json(localHistory);
         }
-    };
-    
-    // בדיקה ראשונית מיידית
-    monitorAlerts();
-    
-    // בדיקה כל 3 שניות (מהיר יותר לפיקוד העורף)
-    const monitoringInterval = setInterval(monitorAlerts, 3000);
-    
-    // שמירה של המעקב לניקוי עתידי
-    process.monitoringInterval = monitoringInterval;
-    
-    formatLogMessage('info', 'Monitor', 'מעקב כל 3 שניות עם 3 מקורות: פיקוד העורף הרשמי → kore.co.il → API ישן');
-    formatLogMessage('info', 'Monitor', 'מנגנון fallback חכם עם הארכת זמנים בעת כשלונות רצופים');
-}
+    } else {
+        res.json(alertHistory.slice(0, 50));
+    }
+});
 
-// בדיקת API עם Cache
-async function checkKoreAPIWithCache() {
-    const now = Date.now();
-    const cached = alertCache.get('kore');
-    
-    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
-        formatLogMessage('debug', 'Cache', 'משתמש בתוצאה מ-cache');
-        return cached.data;
-    }
-    
-    try {
-        const result = await checkKoreAPI();
-        alertCache.set('kore', { data: result, timestamp: now });
-        return result;
-    } catch (error) {
-        if (cached) {
-            formatLogMessage('warning', 'API', 'שגיאה ב-API, משתמש בנתונים ישנים');
-            return cached.data;
-        }
-        throw error;
-    }
-}
-
-// פונקציית התראות מתוקנת
-function notifyRelevantUsers(alert) {
-    if (!alert.cities || alert.cities.length === 0) {
-        formatLogMessage('error', 'Notification', '🚨 התראה ללא ערים מוגדרות - לא שולח לאף אחד!', {
-            alertType: alert.type,
-            originalCities: alert.originalCities?.length || 0,
-            alertTitle: alert.title
-        });
-        return;
-    }
-    
-    let notifiedCount = 0;
-    let shouldNotifyUsers = [];
-    
-    formatLogMessage('debug', 'Notification', '🔍 בודק משתמשים מחוברים', {
-        totalConnectedUsers: connectedUsers.size,
-        connectedUsersCities: Array.from(connectedUsers.values()).map(u => u.cityName),
-        alertAffectedCities: alert.cities,
-        alertType: alert.type
+app.get('/api/status', (req, res) => {
+    res.json({
+        status: 'running',
+        mode: isLiveMode ? 'live' : 'simulation',
+        connectedUsers: connectedUsers.size,
+        lastAlert: lastAlert,
+        uptime: process.uptime(),
+        alertCount: alertHistory.length
     });
-    
-    connectedUsers.forEach((userData, socketId) => {
-        const isAffected = alert.cities.includes(userData.cityName);
-        
-        formatLogMessage('debug', 'Notification', `🔍 בודק משתמש ${socketId}`, {
-            userCity: userData.cityName,
-            isAffected: isAffected,
-            alertCities: alert.cities
-        });
-        
-        if (isAffected) {
-            shouldNotifyUsers.push({
-                socketId: socketId,
-                city: userData.cityName
-            });
-        }
-    });
-    
-    formatLogMessage('info', 'Notification', `📊 סטטיסטיקת התראה`, {
-        alertType: alert.type,
-        affectedCities: alert.cities,
-        totalConnectedUsers: connectedUsers.size,
-        usersToNotify: shouldNotifyUsers.length,
-        usersByCity: shouldNotifyUsers.map(u => u.city)
-    });
-    
-    shouldNotifyUsers.forEach(userInfo => {
-        const socket = io.sockets.sockets.get(userInfo.socketId);
-        if (socket) {
-            socket.emit('alert-update', alert);
-            notifiedCount++;
-            formatLogMessage('debug', 'Notification', `📤 שלח התראה למשתמש`, {
-                socketId: userInfo.socketId,
-                city: userInfo.city,
-                alertType: alert.type
-            });
-        }
-    });
-    
-    formatLogMessage('success', 'Notification', `✅ שלח התראה ל-${notifiedCount} משתמשים`, {
-        cities: alert.cities,
-        notifiedCount: notifiedCount,
-        totalConnected: connectedUsers.size,
-        alertType: alert.type
-    });
-}
-
-function saveToHistory(alert) {
-    const historyEntry = {
-        ...alert,
-        id: Date.now() + Math.random(),
-        timestamp: new Date().toISOString(),
-        hebrewTime: new Date().toLocaleString('he-IL', {
-            timeZone: 'Asia/Jerusalem',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        })
-    };
-    
-    alertHistory.unshift(historyEntry);
-    
-    if (alertHistory.length > 500) {
-        alertHistory = alertHistory.slice(0, 500);
-    }
-    
-    try {
-        fs.writeFileSync('alert_history.json', JSON.stringify(alertHistory, null, 2));
-    } catch (error) {
-        formatLogMessage('warning', 'Storage', 'לא ניתן לשמור היסטוריה', error.message);
-    }
-}
+});
 
 // WebSocket חיבורים - גרסה מתוקנת עם debugging
 io.on('connection', (socket) => {
@@ -1453,83 +988,400 @@ function sendSafeAlertToUser(socket, cityName) {
     });
 }
 
-// API Routes
-app.get('/api/cities', (req, res) => {
-    try {
-        const cities = Object.keys(cityData).sort();
-        res.json(cities);
-        formatLogMessage('success', 'API', `נשלחו ${cities.length} ערים`);
-    } catch (error) {
-        formatLogMessage('error', 'API', 'שגיאה בטעינת ערים', error.message);
-        res.status(500).json({ error: 'שגיאה בטעינת ערים' });
+// פונקציית התראות מתוקנת
+function notifyRelevantUsers(alert) {
+    if (!alert.cities || alert.cities.length === 0) {
+        formatLogMessage('error', 'Notification', '🚨 התראה ללא ערים מוגדרות - לא שולח לאף אחד!', {
+            alertType: alert.type,
+            originalCities: alert.originalCities?.length || 0,
+            alertTitle: alert.title
+        });
+        return;
     }
-});
-
-app.get('/api/city/:name', (req, res) => {
-    const cityName = decodeURIComponent(req.params.name);
-    const city = cityData[cityName];
-    if (city) {
-        res.json({ name: cityName, ...city });
-    } else {
-        res.status(404).json({ error: 'עיר לא נמצאה' });
-    }
-});
-
-app.get('/api/alerts/current', (req, res) => {
-    res.json({ 
-        alert: lastAlert,
-        timestamp: new Date().toISOString(),
-        mode: isLiveMode ? 'live' : 'simulation'
-    });
-});
-
-app.get('/api/alerts/history/:city?', async (req, res) => {
-    const city = req.params.city ? decodeURIComponent(req.params.city) : null;
     
-    if (city) {
+    let notifiedCount = 0;
+    let shouldNotifyUsers = [];
+    
+    formatLogMessage('debug', 'Notification', '🔍 בודק משתמשים מחוברים', {
+        totalConnectedUsers: connectedUsers.size,
+        connectedUsersCities: Array.from(connectedUsers.values()).map(u => u.cityName),
+        alertAffectedCities: alert.cities,
+        alertType: alert.type
+    });
+    
+    connectedUsers.forEach((userData, socketId) => {
+        const isAffected = alert.cities.includes(userData.cityName);
+        
+        formatLogMessage('debug', 'Notification', `🔍 בודק משתמש ${socketId}`, {
+            userCity: userData.cityName,
+            isAffected: isAffected,
+            alertCities: alert.cities
+        });
+        
+        if (isAffected) {
+            shouldNotifyUsers.push({
+                socketId: socketId,
+                city: userData.cityName
+            });
+        }
+    });
+    
+    formatLogMessage('info', 'Notification', `📊 סטטיסטיקת התראה`, {
+        alertType: alert.type,
+        affectedCities: alert.cities,
+        totalConnectedUsers: connectedUsers.size,
+        usersToNotify: shouldNotifyUsers.length,
+        usersByCity: shouldNotifyUsers.map(u => u.city)
+    });
+    
+    shouldNotifyUsers.forEach(userInfo => {
+        const socket = io.sockets.sockets.get(userInfo.socketId);
+        if (socket) {
+            socket.emit('alert-update', alert);
+            notifiedCount++;
+            formatLogMessage('debug', 'Notification', `📤 שלח התראה למשתמש`, {
+                socketId: userInfo.socketId,
+                city: userInfo.city,
+                alertType: alert.type
+            });
+        }
+    });
+    
+    formatLogMessage('success', 'Notification', `✅ שלח התראה ל-${notifiedCount} משתמשים`, {
+        cities: alert.cities,
+        notifiedCount: notifiedCount,
+        totalConnected: connectedUsers.size,
+        alertType: alert.type
+    });
+}
+
+function saveToHistory(alert) {
+    const historyEntry = {
+        ...alert,
+        id: Date.now() + Math.random(),
+        timestamp: new Date().toISOString(),
+        hebrewTime: new Date().toLocaleString('he-IL', {
+            timeZone: 'Asia/Jerusalem',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        })
+    };
+    
+    alertHistory.unshift(historyEntry);
+    
+    if (alertHistory.length > 500) {
+        alertHistory = alertHistory.slice(0, 500);
+    }
+    
+    try {
+        fs.writeFileSync('alert_history.json', JSON.stringify(alertHistory, null, 2));
+    } catch (error) {
+        formatLogMessage('warning', 'Storage', 'לא ניתן לשמור היסטוריה', error.message);
+    }
+}
+
+// בדיקת API עם Cache
+async function checkKoreAPIWithCache() {
+    const now = Date.now();
+    const cached = alertCache.get('kore');
+    
+    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+        formatLogMessage('debug', 'Cache', 'משתמש בתוצאה מ-cache');
+        return cached.data;
+    }
+    
+    try {
+        const result = await checkKoreAPI();
+        alertCache.set('kore', { data: result, timestamp: now });
+        return result;
+    } catch (error) {
+        if (cached) {
+            formatLogMessage('warning', 'API', 'שגיאה ב-API, משתמש בנתונים ישנים');
+            return cached.data;
+        }
+        throw error;
+    }
+}
+
+// בדיקת API של כל רגע עם Health Monitoring
+async function checkKoreAPI() {
+    try {
+        formatLogMessage('debug', 'KoreAPI', 'בודק התראות ב-API של כל רגע');
+        
+        const response = await axios.get('https://www.kore.co.il/redAlert.json', {
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'AlertSystem/3.0',
+                'Accept': 'application/json'
+            }
+        });
+        
+        const alertData = response.data;
+        apiHealthStatus.kore.lastSuccess = Date.now();
+        apiHealthStatus.kore.failures = 0;
+        
+        if (alertData && alertData.id) {
+            if (lastAlertId !== alertData.id) {
+                lastAlertId = alertData.id;
+                
+                formatLogMessage('info', 'KoreAPI', '📥 התראה חדשה התקבלה', {
+                    id: alertData.id,
+                    cat: alertData.cat,
+                    title: alertData.title,
+                    desc: alertData.desc,
+                    citiesCount: alertData.data?.length || 0
+                });
+                
+                const categorized = mapAlertTypeFromKore(alertData);
+                const matchedCities = getCityMatchesFromAlert(alertData.data || []);
+                
+                const enrichedAlert = {
+                    ...alertData,
+                    ...categorized,
+                    cities: matchedCities.length > 0 ? matchedCities : alertData.data,
+                    originalCities: alertData.data,
+                    timestamp: new Date().toISOString(),
+                    hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
+                    source: 'kore-api'
+                };
+                
+                formatLogMessage('success', 'KoreAPI', `✅ התראה מעובדת: ${enrichedAlert.type}`, {
+                    originalCitiesCount: enrichedAlert.originalCities?.length || 0,
+                    matchedCitiesCount: enrichedAlert.cities?.length || 0,
+                    mappedType: categorized.type,
+                    category: alertData.cat
+                });
+                
+                lastAlert = enrichedAlert;
+                saveToHistory(enrichedAlert);
+                notifyRelevantUsers(enrichedAlert);
+                
+                io.emit('global-status', {
+                    hasActiveAlert: enrichedAlert.type !== 'safe' && enrichedAlert.type !== 'all-clear',
+                    affectedAreas: enrichedAlert.cities || [],
+                    lastUpdate: enrichedAlert.timestamp,
+                    alertType: enrichedAlert.type,
+                    mode: 'live'
+                });
+            }
+            return true;
+            
+        } else {
+            if (lastAlert && lastAlert.type !== 'safe' && lastAlert.type !== 'all-clear') {
+                createAllClearAlert();
+            }
+            return false;
+        }
+        
+    } catch (error) {
+        apiHealthStatus.kore.failures++;
+        formatLogMessage('error', 'KoreAPI', `כשל ${apiHealthStatus.kore.failures}`, error.message);
+        throw error;
+    }
+}
+
+// בדיקת API של פיקוד העורף
+async function checkPikudHaOrefAPI() {
+    try {
+        formatLogMessage('debug', 'OrefAPI', 'בודק API של פיקוד העורף');
+        
+        const response = await axios.get('https://www.oref.org.il/WarningMessages/alerts.json', {
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'AlertSystem/3.0',
+                'Accept': 'application/json'
+            }
+        });
+        
+        const alertData = response.data;
+        apiHealthStatus.oref.lastSuccess = Date.now();
+        apiHealthStatus.oref.failures = 0;
+        
+        if (alertData && alertData.data && alertData.data.length > 0) {
+            const alert = alertData.data[0];
+            if (lastAlertId !== alert.id) {
+                lastAlertId = alert.id;
+                
+                const categorized = mapAlertTypeFromKore({ title: alert.title, desc: alert.message });
+                const matchedCities = getCityMatchesFromAlert(alert.cities || []);
+                
+                const enrichedAlert = {
+                    ...alert,
+                    ...categorized,
+                    cities: matchedCities.length > 0 ? matchedCities : alert.cities,
+                    originalCities: alert.cities,
+                    timestamp: new Date().toISOString(),
+                    hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
+                    source: 'pikud-haoref'
+                };
+                
+                formatLogMessage('success', 'OrefAPI', `התראה חדשה: ${enrichedAlert.type}`, {
+                    cities: enrichedAlert.cities
+                });
+                
+                lastAlert = enrichedAlert;
+                saveToHistory(enrichedAlert);
+                notifyRelevantUsers(enrichedAlert);
+                
+                io.emit('global-status', {
+                    hasActiveAlert: enrichedAlert.type !== 'safe' && enrichedAlert.type !== 'all-clear',
+                    affectedAreas: enrichedAlert.cities || [],
+                    lastUpdate: enrichedAlert.timestamp,
+                    alertType: enrichedAlert.type,
+                    mode: 'live'
+                });
+            }
+            return true;
+            
+        } else {
+            if (lastAlert && lastAlert.type !== 'safe' && lastAlert.type !== 'all-clear') {
+                createAllClearAlert();
+            }
+            return false;
+        }
+        
+    } catch (error) {
+        apiHealthStatus.oref.failures++;
+        formatLogMessage('error', 'OrefAPI', `כשל ${apiHealthStatus.oref.failures}`, error.message);
+        throw error;
+    }
+}
+function createAllClearAlert() {
+    if (!lastAlert || !['shelter', 'early-warning', 'radiological', 'earthquake', 
+                         'tsunami', 'aircraft', 'hazmat', 'terror'].includes(lastAlert.type)) {
+        formatLogMessage('debug', 'System', 'לא צריך ליצור התראת יציאה - לא היתה התראת סכנה', {
+            lastAlertType: lastAlert ? lastAlert.type : 'none'
+        });
+        return;
+    }
+    
+    const allClearAlert = {
+        type: 'all-clear',
+        title: 'יציאה מהממ"ד',
+        icon: '🟢',
+        description: 'הסכנה חלפה תודה לאל - ניתן לצאת מהחדר המוגן',
+        severity: 'low',
+        class: 'safe',
+        cities: lastAlert.cities || [],
+        timestamp: new Date().toISOString(),
+        hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
+        source: 'system-auto-clear'
+    };
+    
+    formatLogMessage('info', 'System', 'יוצר התראת יציאה מממ"ד אחרי התראת סכנה', {
+        previousAlert: lastAlert.type,
+        cities: allClearAlert.cities
+    });
+    
+    lastAlert = allClearAlert;
+    lastAlertId = null;
+    saveToHistory(allClearAlert);
+    notifyRelevantUsers(allClearAlert);
+    
+    io.emit('global-status', {
+        hasActiveAlert: false,
+        affectedAreas: [],
+        lastUpdate: allClearAlert.timestamp,
+        alertType: 'all-clear',
+        mode: 'live'
+    });
+}
+
+// מעקב אחר התראות משופר
+function startAlertMonitoring() {
+    formatLogMessage('info', 'Monitor', 'מתחיל מעקב אחר התראות אמיתיות');
+    
+    const monitorAlerts = async () => {
         try {
-            formatLogMessage('info', 'History', `טוען היסטוריה עבור ${city}`);
+            let result = await checkKoreAPIWithCache();
             
-            const response = await axios.get(
-                `https://alerts-history.oref.org.il/Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1&city_0=${encodeURIComponent(city)}`, 
-                { timeout: 10000 }
-            );
+            if (result === null) {
+                formatLogMessage('warning', 'Monitor', 'ניסיון חוזר עם API של פיקוד העורף');
+                result = await checkPikudHaOrefAPI();
+            }
             
-            const history = response.data.map(alert => ({
-                ...mapAlertTypeFromKore({ title: alert.message, desc: alert.message }),
-                time: alert.time,
-                cities: [city],
-                timestamp: new Date().toISOString(),
-                hebrewTime: alert.time
-            }));
+            if (result === null) {
+                formatLogMessage('error', 'Monitor', 'כל ה-APIs נכשלו, מנסה שוב בעוד 5 שניות');
+                setTimeout(monitorAlerts, 5000);
+                return;
+            }
             
-            formatLogMessage('success', 'History', `נטענו ${history.length} רשומות עבור ${city}`);
-            res.json(history.slice(0, 50));
+            isLiveMode = true;
             
         } catch (error) {
-            formatLogMessage('error', 'History', `שגיאה בטעינת היסטוריה עבור ${city}`, error.message);
-            
-            const localHistory = alertHistory.filter(alert => 
-                !alert.cities || alert.cities.length === 0 || alert.cities.includes(city)
-            ).slice(0, 50);
-            
-            res.json(localHistory);
+            formatLogMessage('error', 'Monitor', 'שגיאה כללית במעקב', error.message);
         }
-    } else {
-        res.json(alertHistory.slice(0, 50));
-    }
-});
+    };
+    
+    monitorAlerts();
+    setInterval(monitorAlerts, 5000);
+    formatLogMessage('info', 'Monitor', 'מעקב כל 5 שניות באמצעות APIs מרובים');
+}
 
-app.get('/api/status', (req, res) => {
-    res.json({
-        status: 'running',
-        mode: isLiveMode ? 'live' : 'simulation',
-        connectedUsers: connectedUsers.size,
-        lastAlert: lastAlert,
-        uptime: process.uptime(),
-        alertCount: alertHistory.length
-    });
-});
+// Heartbeat למשתמשים
+function setupHeartbeat() {
+    setInterval(() => {
+        io.emit('heartbeat', {
+            timestamp: new Date().toISOString(),
+            connectedUsers: connectedUsers.size,
+            serverStatus: 'healthy',
+            apiStatus: {
+                kore: apiHealthStatus.kore.failures < 3 ? 'healthy' : 'degraded',
+                oref: apiHealthStatus.oref.failures < 3 ? 'healthy' : 'degraded'
+            }
+        });
+        
+        const now = Date.now();
+        for (const [key, value] of alertCache.entries()) {
+            if (now - value.timestamp > CACHE_DURATION * 2) {
+                alertCache.delete(key);
+            }
+        }
+        
+        for (const [ip, data] of requestCounts.entries()) {
+            if (now > data.resetTime) {
+                requestCounts.delete(ip);
+            }
+        }
+        
+    }, 30000);
+    
+    formatLogMessage('info', 'Heartbeat', 'Heartbeat הופעל');
+}
+
+// טעינת היסטוריה קיימת
+function loadExistingHistory() {
+    try {
+        if (fs.existsSync('alert_history.json')) {
+            const data = fs.readFileSync('alert_history.json', 'utf8');
+            alertHistory = JSON.parse(data);
+            formatLogMessage('success', 'Storage', `נטענו ${alertHistory.length} רשומות היסטוריה`);
+        } else {
+            const initialAlert = {
+                id: Date.now(),
+                type: 'safe',
+                title: 'מערכת התראות פעילה',
+                icon: '✅',
+                description: 'המערכת עלתה בהצלחה ומחוברת לכל ה-APIs',
+                cities: [],
+                timestamp: new Date().toISOString(),
+                hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
+                source: 'system'
+            };
+            
+            alertHistory = [initialAlert];
+            saveToHistory(initialAlert);
+            formatLogMessage('info', 'Storage', 'נוצרה היסטוריה ראשונית');
+        }
+    } catch (error) {
+        formatLogMessage('error', 'Storage', 'שגיאה בטעינת היסטוריה', error.message);
+        alertHistory = [];
+    }
+}
 
 // Routes
 app.get('/', (req, res) => {
@@ -1561,13 +1413,6 @@ app.get('/api/health/detailed', (req, res) => {
                 failures: apiHealthStatus.oref.failures,
                 timeSinceLastSuccess: apiHealthStatus.oref.lastSuccess ? 
                     now - apiHealthStatus.oref.lastSuccess : null
-            },
-            oref_official: {
-                status: apiHealthStatus.oref_official.failures < 3 ? 'healthy' : 'degraded',
-                lastSuccess: apiHealthStatus.oref_official.lastSuccess,
-                failures: apiHealthStatus.oref_official.failures,
-                timeSinceLastSuccess: apiHealthStatus.oref_official.lastSuccess ? 
-                    now - apiHealthStatus.oref_official.lastSuccess : null
             }
         },
         alerts: {
@@ -1587,10 +1432,9 @@ app.get('/health', (req, res) => {
         users: connectedUsers.size,
         alerts: alertHistory.length,
         timestamp: new Date().toISOString(),
-        apis: 'pikud-haoref-official, kore.co.il, pikud-haoref-old',
-        version: '3.1.0-FIXED',
+        apis: 'kore.co.il, pikud-haoref',
+        version: '3.1.0-socket-fix',
         socketIO: {
-            transport: 'polling-only',
             connected: connectedUsers.size,
             lastAlert: lastAlert ? lastAlert.type : 'none'
         }
@@ -1600,15 +1444,14 @@ app.get('/health', (req, res) => {
 // Route מיוחד לבדיקת Socket.IO
 app.get('/socket-test', (req, res) => {
     res.json({
-        socketIO: 'active-polling-only',
+        socketIO: 'active',
         connectedUsers: connectedUsers.size,
         usersList: Array.from(connectedUsers.values()).map(user => ({
             city: user.cityName,
             connected: user.connectedAt
         })),
         lastAlert: lastAlert,
-        isLive: isLiveMode,
-        transport: 'polling'
+        isLive: isLiveMode
     });
 });
 
@@ -1725,7 +1568,7 @@ app.get('/api/test-connections', async (req, res) => {
         };
     }
     
-    // בדיקת Oref API ישן
+    // בדיקת Oref API
     try {
         const orefStart = Date.now();
         await axios.get('https://www.oref.org.il/WarningMessages/alerts.json', { timeout: 5000 });
@@ -1742,112 +1585,24 @@ app.get('/api/test-connections', async (req, res) => {
         };
     }
     
-    // בדיקת API הרשמי של פיקוד העורף
-    try {
-        const orefOfficialStart = Date.now();
-        await axios.get('https://www.oref.org.il/WarningMessages/alert/alerts.json', { 
-            timeout: 5000,
-            headers: {
-                'Referer': 'https://www.oref.org.il/',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        results.tests.oref_official = {
-            status: 'success',
-            responseTime: Date.now() - orefOfficialStart,
-            message: 'API רשמי - חיבור תקין'
-        };
-    } catch (error) {
-        results.tests.oref_official = {
-            status: 'error',
-            message: error.message,
-            responseTime: null
-        };
-    }
-    
     res.json(results);
 });
-
-// Heartbeat למשתמשים
-function setupHeartbeat() {
-    setInterval(() => {
-        io.emit('heartbeat', {
-            timestamp: new Date().toISOString(),
-            connectedUsers: connectedUsers.size,
-            serverStatus: 'healthy',
-            apiStatus: {
-                kore: apiHealthStatus.kore.failures < 3 ? 'healthy' : 'degraded',
-                oref: apiHealthStatus.oref.failures < 3 ? 'healthy' : 'degraded',
-                oref_official: apiHealthStatus.oref_official.failures < 3 ? 'healthy' : 'degraded'
-            }
-        });
-        
-        const now = Date.now();
-        for (const [key, value] of alertCache.entries()) {
-            if (now - value.timestamp > CACHE_DURATION * 2) {
-                alertCache.delete(key);
-            }
-        }
-        
-        for (const [ip, data] of requestCounts.entries()) {
-            if (now > data.resetTime) {
-                requestCounts.delete(ip);
-            }
-        }
-        
-    }, 30000);
-    
-    formatLogMessage('info', 'Heartbeat', 'Heartbeat הופעל');
-}
-
-// טעינת היסטוריה קיימת
-function loadExistingHistory() {
-    try {
-        if (fs.existsSync('alert_history.json')) {
-            const data = fs.readFileSync('alert_history.json', 'utf8');
-            alertHistory = JSON.parse(data);
-            formatLogMessage('success', 'Storage', `נטענו ${alertHistory.length} רשומות היסטוריה`);
-        } else {
-            const initialAlert = {
-                id: Date.now(),
-                type: 'safe',
-                title: 'מערכת התראות פעילה',
-                icon: '✅',
-                description: 'המערכת עלתה בהצלחה ומחוברת לכל ה-APIs',
-                cities: [],
-                timestamp: new Date().toISOString(),
-                hebrewTime: new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }),
-                source: 'system'
-            };
-            
-            alertHistory = [initialAlert];
-            saveToHistory(initialAlert);
-            formatLogMessage('info', 'Storage', 'נוצרה היסטוריה ראשונית');
-        }
-    } catch (error) {
-        formatLogMessage('error', 'Storage', 'שגיאה בטעינת היסטוריה', error.message);
-        alertHistory = [];
-    }
-}
 
 // הפעלת השרת
 function startServer() {
     loadExistingHistory();
     
     server.listen(PORT, () => {
-        formatLogMessage('success', 'Server', '🎉 מערכת התראות מתוקנת לחלוטין פועלת! 🎉');
+        formatLogMessage('success', 'Server', '🎉 מערכת התראות משופרת פועלת! 🎉');
         formatLogMessage('info', 'Server', `📡 פורט: ${PORT}`);
         formatLogMessage('info', 'Server', `🌐 כתובת: ${process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + PORT}`);
-        formatLogMessage('info', 'Server', `🔗 APIs: פיקוד העורף הרשמי + kore.co.il + API ישן (עם cache ו-failover)`);
+        formatLogMessage('info', 'Server', `🔗 APIs: kore.co.il (עם cache ו-failover)`);
         formatLogMessage('info', 'Server', `👥 משתמשים מחוברים: ${connectedUsers.size}`);
         formatLogMessage('info', 'Server', `📚 היסטוריה: ${alertHistory.length} רשומות`);
         formatLogMessage('info', 'Server', `🛡️ אבטחה: Helmet, Compression, Rate Limiting`);
-        formatLogMessage('info', 'Server', `⚡ תכונות: Triple API, Duplicate Prevention, Health Monitoring`);
-        formatLogMessage('info', 'Server', `🔧 תיקונים: Socket.IO polling-only, API headers מתוקנים`);
+        formatLogMessage('info', 'Server', `⚡ תכונות: Cache, Health Monitoring, Fuzzy Matching`);
+        formatLogMessage('info', 'Server', `🔧 תיקונים: בחירה אוטומטית, התראות קוליות, מיפוי נכון`);
         formatLogMessage('info', 'Server', `🗣️ חדש: תמיכה קולית עם Speech Synthesis API`);
-        formatLogMessage('info', 'Server', `🎯 מקורות: 1️⃣ פיקוד העורף הרשמי → 2️⃣ kore.co.il → 3️⃣ API ישן`);
-        formatLogMessage('info', 'Server', `⚡ מעקב: כל 3 שניות עם fallback חכם ומניעת כפילויות`);
-        formatLogMessage('info', 'Server', `🛠️ WebSocket: רק polling (לא websocket) לייצוב על Render`);
         
         startAlertMonitoring();
         setupHeartbeat();
@@ -1865,17 +1620,11 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('SIGINT', () => {
     formatLogMessage('info', 'Process', '🛑 סוגר שרת (SIGINT)');
-    if (process.monitoringInterval) {
-        clearInterval(process.monitoringInterval);
-    }
     gracefulShutdown();
 });
 
 process.on('SIGTERM', () => {
     formatLogMessage('info', 'Process', '🛑 סוגר שרת (SIGTERM)');
-    if (process.monitoringInterval) {
-        clearInterval(process.monitoringInterval);
-    }
     gracefulShutdown();
 });
 
@@ -1907,4 +1656,4 @@ function gracefulShutdown() {
 // התחל את המערכת
 startServer();
 
-module.exports = app;// server.js - מערכת התראות חכמה עם תיקונים מלאים - גרסה 3.1-FIXED
+module.exports = app;
