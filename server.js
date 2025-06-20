@@ -19,8 +19,6 @@ const io = socketIo(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-
-// נתוני ערים מעודכנים - רשימה מלאה
 const cityData = {
     'אבו גוש': { zone: 'ירושלים', shelterTime: 90, area: 203, established: 1994 },
     'אבן יהודה': { zone: 'שרון', shelterTime: 90, area: 1083, established: 1932 },
@@ -36,7 +34,7 @@ const cityData = {
     'באר יעקב': { zone: 'יהודה', shelterTime: 90, area: 1158, established: 1907 },
     'באר שבע': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1200, established: 1900 },
     'בית אל': { zone: 'שומרון', shelterTime: 90, area: 303 },
-    'בית מש': { zone: 'ירושלים', shelterTime: 90, area: 143, established: 1950 },
+    'בית שמש': { zone: 'ירושלים', shelterTime: 90, area: 143, established: 1950 },
     'בית שאן': { zone: 'בקעת הירדן', shelterTime: 60, area: 85, established: -4000 },
     'ביתר עילית': { zone: 'גוש עציון', shelterTime: 90, area: 302, established: 1988 },
     'בני ברק': { zone: 'דן', shelterTime: 90, area: 164, established: 1924 },
@@ -111,7 +109,7 @@ const cityData = {
     'קרית עקרון': { zone: 'יהודה', shelterTime: 90, area: 1153 },
     'קרית שמונה': { zone: 'גליל עליון', shelterTime: 30, area: 140, established: 1949 },
     'ראמלה': { zone: 'יהודה', shelterTime: 90, area: 1144, established: 716 },
-    'ראה ראש העין': { zone: 'שרון', shelterTime: 90, area: 1089, established: 1949 },
+    'ראש העין': { zone: 'שרון', shelterTime: 90, area: 1089, established: 1949 },
     'ראשון לציון': { zone: 'דן', shelterTime: 90, area: 104, established: 1882 },
     'רחובות': { zone: 'יהודה', shelterTime: 90, area: 1146, established: 1890 },
     'רמת גן': { zone: 'דן', shelterTime: 90, area: 106, established: 1921 },
@@ -126,7 +124,20 @@ const cityData = {
     'טירת כרמל': { zone: 'חיפה והכרמל', shelterTime: 60, area: 402, established: 1992 },
     'תל אביב יפו': { zone: 'דן', shelterTime: 90, area: 102, established: 1909 },
     'תל מונד': { zone: 'שרון', shelterTime: 90, area: 1094, established: 1926 },
-    // *** הוספת כל הערים החסרות מהלוג ***
+    
+    // ערים נוספות שחסרו במקור
+    'אשדוד': { zone: 'אשדוד', shelterTime: 45, area: 1031, established: 1956 },
+    'אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 30, area: 1035, established: 1950 },
+    'בנימינה גבעת עדה': { zone: 'שרון', shelterTime: 90, area: 1095, established: 1922 },
+    'זכרון יעקב': { zone: 'שרון', shelterTime: 90, area: 1096, established: 1882 },
+    'יבנאל': { zone: 'כינרת', shelterTime: 60, area: 84, established: 1901 },
+    'יקנעם': { zone: 'עמק יזרעאל', shelterTime: 60, area: 87, established: 1935 },
+    'לוד': { zone: 'יהודה', shelterTime: 90, area: 1145, established: -8000 },
+    'מעיליא': { zone: 'גליל עליון', shelterTime: 30, area: 150, established: 1963 },
+    'נצרת עילית': { zone: 'גליל תחתון', shelterTime: 60, area: 79, established: 1957 },
+    'פקיעין': { zone: 'גליל מערבי', shelterTime: 60, area: 137, established: 1955 },
+    'שפרעם': { zone: 'גליל מערבי', shelterTime: 60, area: 405, established: 636 },
+    
     // אזור ים המלח
     'בתי מלון ים המלח': { zone: 'ים המלח', shelterTime: 60, area: 1301, established: 1960 },
     'מלונות ים המלח מרכז': { zone: 'ים המלח', shelterTime: 60, area: 1302, established: 1960 },
@@ -244,24 +255,63 @@ const cityData = {
     'ניר עם': { zone: 'עוטף עזה', shelterTime: 15, area: 1312, established: 1943 },
     'כפר עזה': { zone: 'עוטף עזה', shelterTime: 15, area: 1313, established: 1951 },
     'נחל עוז': { zone: 'עוטף עזה', shelterTime: 15, area: 1314, established: 1951 },
-    'אור הנר': { zone: 'עוטף עזה', shelterTime: 15, area: 1315, established: 1957 }
-
-};
-
-// מילון קיצורים וכינויים לערים
-const cityAliases = {
-    'ת"א': 'תל אביב יפו',
-    'תא': 'תל אביב יפו',
-    'תל אביב': 'תל אביב יפו',
-    'ירושלים': ['ירושלים', 'מעלה אדומים', 'בית שמש'],
-    'ב"ש': 'באר שבע',
-    'בש': 'באר שבע',
-    'ק"ש': 'קרית שמונה',
-    'קש': 'קרית שמונה',
-    'פ"ת': 'פתח תקווה',
-    'פת': 'פתח תקווה',
-    'ר"ג': 'רמת גן',
-    'רג': 'רמת גן'
+    'אור הנר': { zone: 'עוטף עזה', shelterTime: 15, area: 1315, established: 1957 },
+    
+    // ערים נוספות חשובות שחסרו
+    'אילת': { zone: 'אילת', shelterTime: 180, area: 1207, established: 1949 },
+    'גבעת זאב': { zone: 'ירושלים', shelterTime: 90, area: 204, established: 1983 },
+    'מעלה עדומים': { zone: 'ירושלים', shelterTime: 90, area: 205, established: 1975 },
+    'פסגת זאב': { zone: 'ירושלים', shelterTime: 90, area: 206, established: 1985 },
+    'גבעת שמואל': { zone: 'דן', shelterTime: 90, area: 117, established: 1942 },
+    'חולון': { zone: 'דן', shelterTime: 90, area: 108, established: 1935 },
+    'כפר מנדא': { zone: 'גליל תחתון', shelterTime: 60, area: 409, established: 1800 },
+    'מגדל העמק': { zone: 'עמק יזרעאל', shelterTime: 60, area: 88, established: 1952 },
+    'ראש פינה': { zone: 'גליל עליון', shelterTime: 30, area: 151, established: 1882 },
+    'יסוד המעלה': { zone: 'גליל עליון', shelterTime: 30, area: 152, established: 1883 },
+    'רמת ישי': { zone: 'עמק יזרעאל', shelterTime: 60, area: 89, established: 1925 },
+    'יפיע': { zone: 'גליל תחתון', shelterTime: 60, area: 410, established: 1926 },
+    'עין מאהל': { zone: 'גליל תחתון', shelterTime: 60, area: 411, established: 1935 },
+    'דיר חנא': { zone: 'גליל מערבי', shelterTime: 60, area: 412, established: 1800 },
+    'גת': { zone: 'משולש', shelterTime: 90, area: 413, established: 1886 },
+    'באקה אל גרביה': { zone: 'משולש', shelterTime: 90, area: 414, established: 1400 },
+    'ועדי עארה': { zone: 'משולש', shelterTime: 90, area: 415, established: 1967 },
+    'מעיליא': { zone: 'גליל עליון', shelterTime: 15, area: 153, established: 1963 },
+    'קריית ארבע': { zone: 'גוש עציון', shelterTime: 90, area: 309, established: 1968 },
+    'כוכב יאיר': { zone: 'דן', shelterTime: 90, area: 118, established: 1981 },
+    'כפר ורדים': { zone: 'גליל עליון', shelterTime: 30, area: 154, established: 1979 },
+    'שלמי': { zone: 'גליל עליון', shelterTime: 15, area: 155, established: 1950 },
+    'משגב עם': { zone: 'גליל עליון', shelterTime: 30, area: 156, established: 1940 },
+    'עבדון': { zone: 'גליל מערבי', shelterTime: 30, area: 157, established: 1945 },
+    'פסוטה': { zone: 'גליל עליון', shelterTime: 15, area: 158, established: 1940 },
+    'מנוף': { zone: 'גליל עליון', shelterTime: 15, area: 159, established: 1980 },
+    'אדמית': { zone: 'גליל עליון', shelterTime: 15, area: 160, established: 1958 },
+    'זרית': { zone: 'גליל עליון', shelterTime: 15, area: 161, established: 1956 },
+    'גורן': { zone: 'גליל עליון', shelterTime: 30, area: 162, established: 1950 },
+    'נתועה': { zone: 'גליל עליון', shelterTime: 15, area: 163, established: 1966 },
+    'שתולה': { zone: 'גליל עליון', shelterTime: 15, area: 164, established: 1969 },
+    'קדש': { zone: 'גליל עליון', shelterTime: 15, area: 165, established: 1981 },
+    'מלכיה': { zone: 'גליל עליון', shelterTime: 15, area: 166, established: 1949 },
+    'יפתח': { zone: 'גליל עליון', shelterTime: 15, area: 167, established: 1950 },
+    'עין קיניא': { zone: 'גליל עליון', shelterTime: 15, area: 168, established: 1964 },
+    'משמר הירדן': { zone: 'בקעת הירדן', shelterTime: 60, area: 169, established: 1890 },
+    'יסוד המעלה': { zone: 'גליל עליון', shelterTime: 30, area: 170, established: 1883 },
+    'כפר גלעדי': { zone: 'גליל עליון', shelterTime: 15, area: 171, established: 1949 },
+    'הזורעים': { zone: 'גליל עליון', shelterTime: 30, area: 172, established: 1948 },
+    'שושנת העמקים': { zone: 'גליל עליון', shelterTime: 30, area: 173, established: 1948 },
+    'בנימין': { zone: 'שומרון', shelterTime: 90, area: 310, established: 1985 },
+    'קרני שומרון': { zone: 'שומרון', shelterTime: 90, area: 311, established: 1978 },
+    'אלפי מנשה': { zone: 'שומרון', shelterTime: 90, area: 312, established: 1982 },
+    'ברקן': { zone: 'שומרון', shelterTime: 90, area: 313, established: 1981 },
+    'עפרה': { zone: 'שומרון', shelterTime: 90, area: 314, established: 1978 },
+    'גבעת אסף': { zone: 'שומרון', shelterTime: 90, area: 315, established: 1983 },
+    'עתניאל': { zone: 'הר חברון', shelterTime: 90, area: 316, established: 1983 },
+    'קריית נטפים': { zone: 'ירושלים', shelterTime: 90, area: 207, established: 1988 },
+    'תלפיות': { zone: 'ירושלים', shelterTime: 90, area: 208, established: 1922 },
+    'רמות': { zone: 'ירושלים', shelterTime: 90, area: 209, established: 1973 },
+    'נווה יעקב': { zone: 'ירושלים', shelterTime: 90, area: 210, established: 1924 },
+    'פיסגת זאב': { zone: 'ירושלים', shelterTime: 90, area: 211, established: 1985 },
+    'גילה': { zone: 'ירושלים', shelterTime: 90, area: 212, established: 1973 },
+    'הר חומה': { zone: 'ירושלים', shelterTime: 90, area: 213, established: 1997 }
 };
 
 // משתנים גלובליים
