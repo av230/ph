@@ -1,4 +1,4 @@
-// server.js - מערכת התראות חכמה עם תיקונים מלאים - גרסה 3.0
+
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -14,11 +14,21 @@ const server = http.createServer(app);
 const io = socketIo(server, {
     cors: {
         origin: "*",
-        methods: ["GET", "POST"]
-    }
+        methods: ["GET", "POST"],
+        allowedHeaders: ["Content-Type"],
+        credentials: true
+    },
+    allowEIO3: true,
+    transports: ['websocket', 'polling']
 });
 
 const PORT = process.env.PORT || 3000;
+
+// נתוני ערים מעודכנים - רשימה מלאה
+
+
+
+// נתוני ערים מעודכנים - רשימה מלאה ומעודכנת
 const cityData = {
     'אבו גוש': { zone: 'ירושלים', shelterTime: 90, area: 203, established: 1994 },
     'אבן יהודה': { zone: 'שרון', shelterTime: 90, area: 1083, established: 1932 },
@@ -314,6 +324,22 @@ const cityData = {
     'הר חומה': { zone: 'ירושלים', shelterTime: 90, area: 213, established: 1997 }
 };
 
+// מילון קיצורים וכינויים לערים
+const cityAliases = {
+    'ת"א': 'תל אביב יפו',
+    'תא': 'תל אביב יפו',
+    'תל אביב': 'תל אביב יפו',
+    'ירושלים': ['ירושלים', 'מעלה אדומים', 'בית שמש'],
+    'ב"ש': 'באר שבע',
+    'בש': 'באר שבע',
+    'ק"ש': 'קרית שמונה',
+    'קש': 'קרית שמונה',
+    'פ"ת': 'פתח תקווה',
+    'פת': 'פתח תקווה',
+    'ר"ג': 'רמת גן',
+    'רג': 'רמת גן'
+};
+
 // משתנים גלובליים
 let alertHistory = [];
 let lastAlert = null;
@@ -334,27 +360,41 @@ const requestCounts = new Map();
 const RATE_LIMIT_WINDOW = 60000; // דקה
 const MAX_REQUESTS_PER_WINDOW = 100;
 
-// Middleware מתקדם עם CSP מתוקן
+// Middleware מתקדם עם CSP מתוקן לתמיכה ב-Socket.IO
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
-            defaultSrc: ["'self'", "netfree.link"],
-            styleSrc: ["'self'", "'unsafe-inline'", "netfree.link"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "netfree.link"],
-            connectSrc: ["'self'", "wss:", "ws:", "https:", "netfree.link"],
-            imgSrc: ["'self'", "data:", "https:", "netfree.link"],
-            fontSrc: ["'self'", "https:", "data:", "netfree.link"],
-            mediaSrc: ["'self'", "data:", "blob:", "netfree.link"],
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+            connectSrc: ["'self'", "wss:", "ws:", "https:", "*"],
+            imgSrc: ["'self'", "data:", "https:"],
+            fontSrc: ["'self'", "https:", "data:"],
+            mediaSrc: ["'self'", "data:", "blob:"],
             objectSrc: ["'none'"],
-            upgradeInsecureRequests: [],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"]
         }
-    }
+    },
+    crossOriginEmbedderPolicy: false
 }));
 
 app.use(compression());
-app.use(cors());
+app.use(cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
+}));
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static('public', {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
 
 // Rate Limiting Middleware
 app.use((req, res, next) => {
@@ -795,90 +835,107 @@ app.get('/api/status', (req, res) => {
     });
 });
 
-// WebSocket חיבורים - גרסה מתוקנת
+// WebSocket חיבורים - גרסה מתוקנת עם debugging
 io.on('connection', (socket) => {
-    formatLogMessage('info', 'WebSocket', `משתמש חדש התחבר: ${socket.id}`);
+    formatLogMessage('success', 'WebSocket', `✅ משתמש חדש התחבר: ${socket.id}`);
     
+    // שלח מיד אישור חיבור
     socket.emit('connection-status', {
         connected: true,
         mode: isLiveMode ? 'live' : 'simulation',
-        serverTime: new Date().toISOString()
+        serverTime: new Date().toISOString(),
+        message: 'התחבר בהצלחה לשרת התראות'
+    });
+    
+    // לוג כל האירועים שמגיעים
+    socket.onAny((eventName, ...args) => {
+        formatLogMessage('debug', 'Socket-Event', `📨 אירוע: ${eventName}`, args);
     });
     
     socket.on('register-city', (cityName) => {
         formatLogMessage('info', 'Registration', `🏙️ משתמש ${socket.id} נרשם לעיר: ${cityName}`);
         
-        // תיקון: נקה התראות ישנות לעיר הספציפית
-        const alertRelevance = clearOldAlertsForCity(cityName);
-        
-        connectedUsers.set(socket.id, { 
-            cityName, 
-            connectedAt: new Date(),
-            lastSeen: new Date()
-        });
-        
-        // תיקון: שלח התראה רק אם רלוונטית
-        if (lastAlert && alertRelevance === true) {
-            formatLogMessage('info', 'Registration', `שולח התראה רלוונטית למשתמש חדש`, {
-                alertType: lastAlert.type,
-                city: cityName
+        try {
+            // תיקון: נקה התראות ישנות לעיר הספציפית
+            const alertRelevance = clearOldAlertsForCity(cityName);
+            
+            connectedUsers.set(socket.id, { 
+                cityName, 
+                connectedAt: new Date(),
+                lastSeen: new Date()
             });
-            socket.emit('alert-update', lastAlert);
-        } else {
-            formatLogMessage('info', 'Registration', `שולח מצב בטוח למשתמש חדש`, {
+            
+            // שלח אישור רישום
+            socket.emit('registration-confirmed', {
                 city: cityName,
-                reason: alertRelevance === false ? 'התראה לא רלוונטית' : 'אין התראה פעילה'
+                status: 'success',
+                timestamp: new Date().toISOString()
             });
-            sendSafeAlertToUser(socket, cityName);
+            
+            // תיקון: שלח התראה רק אם רלוונטית
+            if (lastAlert && alertRelevance === true) {
+                formatLogMessage('info', 'Registration', `שולח התראה רלוונטית למשתמש חדש`, {
+                    alertType: lastAlert.type,
+                    city: cityName
+                });
+                socket.emit('alert-update', lastAlert);
+            } else {
+                formatLogMessage('info', 'Registration', `שולח מצב בטוח למשתמש חדש`, {
+                    city: cityName,
+                    reason: alertRelevance === false ? 'התראה לא רלוונטית' : 'אין התראה פעילה'
+                });
+                sendSafeAlertToUser(socket, cityName);
+            }
+            
+            const cityHistory = alertHistory.filter(alert => 
+                !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
+            ).slice(0, 20);
+            
+            socket.emit('history-update', cityHistory);
+            
+            formatLogMessage('success', 'Registration', `✅ רישום הושלם עבור ${cityName}`, {
+                historyItems: cityHistory.length,
+                connectedUsers: connectedUsers.size
+            });
+            
+        } catch (error) {
+            formatLogMessage('error', 'Registration', `❌ שגיאה ברישום עיר ${cityName}`, error.message);
+            socket.emit('registration-error', {
+                city: cityName,
+                error: error.message
+            });
         }
-        
-        const cityHistory = alertHistory.filter(alert => 
-            !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
-        ).slice(0, 20);
-        
-        socket.emit('history-update', cityHistory);
-        
-        formatLogMessage('success', 'Registration', `רישום הושלם עבור ${cityName}`, {
-            historyItems: cityHistory.length
-        });
     });
     
     socket.on('get-history', (cityName) => {
-        formatLogMessage('debug', 'History', `בקשת היסטוריה עבור ${cityName}`);
+        formatLogMessage('debug', 'History', `📚 בקשת היסטוריה עבור ${cityName}`);
         
-        const cityHistory = alertHistory.filter(alert => 
-            !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
-        ).slice(0, 20);
-        
-        socket.emit('history-update', cityHistory);
-        
-        formatLogMessage('success', 'History', `נשלחה היסטוריה עבור ${cityName}`, {
-            items: cityHistory.length
-        });
-    });
-    
-    socket.on('request-city-specific-alerts', (cityName) => {
-        formatLogMessage('debug', 'CitySpecific', `בקשה להתראות ספציפיות עבור ${cityName}`);
-        
-        const alertRelevance = clearOldAlertsForCity(cityName);
-        
-        if (lastAlert && alertRelevance === true) {
-            socket.emit('alert-update', lastAlert);
-            formatLogMessage('info', 'CitySpecific', `נשלחה התראה רלוונטית`, {
-                alertType: lastAlert.type,
-                city: cityName
+        try {
+            const cityHistory = alertHistory.filter(alert => 
+                !alert.cities || alert.cities.length === 0 || alert.cities.includes(cityName)
+            ).slice(0, 20);
+            
+            socket.emit('history-update', cityHistory);
+            
+            formatLogMessage('success', 'History', `✅ נשלחה היסטוריה עבור ${cityName}`, {
+                items: cityHistory.length
             });
-        } else {
-            sendSafeAlertToUser(socket, cityName);
-            formatLogMessage('info', 'CitySpecific', `נשלח מצב בטוח`, {
-                city: cityName
-            });
+        } catch (error) {
+            formatLogMessage('error', 'History', `❌ שגיאה בטעינת היסטוריה`, error.message);
         }
     });
     
-    socket.on('disconnect', () => {
-        formatLogMessage('info', 'WebSocket', `משתמש ${socket.id} התנתק`);
+    socket.on('ping', () => {
+        socket.emit('pong', { timestamp: new Date().toISOString() });
+    });
+    
+    socket.on('disconnect', (reason) => {
+        formatLogMessage('warning', 'WebSocket', `❌ משתמש ${socket.id} התנתק: ${reason}`);
         connectedUsers.delete(socket.id);
+    });
+    
+    socket.on('error', (error) => {
+        formatLogMessage('error', 'WebSocket', `🚨 שגיאת Socket ${socket.id}`, error.message);
     });
 });
 
@@ -1376,7 +1433,25 @@ app.get('/health', (req, res) => {
         alerts: alertHistory.length,
         timestamp: new Date().toISOString(),
         apis: 'kore.co.il, pikud-haoref',
-        version: '3.0.0-with-voice-and-fixes'
+        version: '3.1.0-socket-fix',
+        socketIO: {
+            connected: connectedUsers.size,
+            lastAlert: lastAlert ? lastAlert.type : 'none'
+        }
+    });
+});
+
+// Route מיוחד לבדיקת Socket.IO
+app.get('/socket-test', (req, res) => {
+    res.json({
+        socketIO: 'active',
+        connectedUsers: connectedUsers.size,
+        usersList: Array.from(connectedUsers.values()).map(user => ({
+            city: user.cityName,
+            connected: user.connectedAt
+        })),
+        lastAlert: lastAlert,
+        isLive: isLiveMode
     });
 });
 
