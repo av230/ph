@@ -360,25 +360,27 @@ const requestCounts = new Map();
 const RATE_LIMIT_WINDOW = 60000; // דקה
 const MAX_REQUESTS_PER_WINDOW = 100;
 
-// Middleware מתקדם עם CSP מתוקן לתמיכה ב-Socket.IO
+// Middleware מתקדם עם CSP מתוקן
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-            connectSrc: ["'self'", "wss:", "ws:", "https:", "*"],
-            imgSrc: ["'self'", "data:", "https:"],
-            fontSrc: ["'self'", "https:", "data:"],
-            mediaSrc: ["'self'", "data:", "blob:"],
+            defaultSrc: ["'self'", "netfree.link"],
+            styleSrc: ["'self'", "'unsafe-inline'", "netfree.link"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "netfree.link"],
+            connectSrc: ["'self'", "wss:", "ws:", "https:", "netfree.link"],
+            imgSrc: ["'self'", "data:", "https:", "netfree.link"],
+            fontSrc: ["'self'", "https:", "data:", "netfree.link"],
+            mediaSrc: ["'self'", "data:", "blob:", "netfree.link"],
             objectSrc: ["'none'"],
-            baseUri: ["'self'"],
+            upgradeInsecureRequests: [],
+             baseUri: ["'self'"],
             formAction: ["'self'"],
             frameAncestors: ["'none'"]
         }
     },
     crossOriginEmbedderPolicy: false
 }));
+
 
 app.use(compression());
 app.use(cors({
