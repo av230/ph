@@ -1001,12 +1001,17 @@
 
         function initializeSocket() {
             try {
+                console.log('🔌 מנסה להתחבר ל-Socket.IO...');
+                
                 socket = io({
                     autoConnect: true,
                     reconnection: true,
                     reconnectionDelay: 1000,
                     reconnectionDelayMax: 5000,
-                    maxReconnectionAttempts: MAX_RETRY_COUNT
+                    maxReconnectionAttempts: MAX_RETRY_COUNT,
+                    timeout: 20000,
+                    forceNew: true,
+                    transports: ['websocket', 'polling']
                 });
                 
                 socket.on('connect', () => {
@@ -1014,9 +1019,12 @@
                     connectionRetryCount = 0;
                     updateConnectionStatus(true, 'מחובר לשרת');
                     showNotification('התחבר לשרת בהצלחה', 'success');
-                    console.log('✅ Connected to server');
+                    console.log('✅ Connected to server successfully');
                     
                     cityInput.disabled = false;
+                    
+                    // בדיקת ping
+                    socket.emit('ping');
                     
                     // תיקון: אם יש עיר נבחרת, הפעל את כל התהליך מחדש
                     if (currentCity) {
@@ -1027,35 +1035,51 @@
 
                 socket.on('disconnect', (reason) => {
                     isConnected = false;
-                    updateConnectionStatus(false, 'לא מחובר');
+                    updateConnectionStatus(false, `לא מחובר: ${reason}`);
                     updateApiStatus('error', 'אין חיבור לשרת');
                     cityInput.disabled = true;
-                    showNotification('התנתק מהשרת', 'warning');
+                    showNotification(`התנתק מהשרת: ${reason}`, 'warning');
                     console.log('❌ Disconnected from server:', reason);
                 });
 
                 socket.on('connect_error', (error) => {
                     connectionRetryCount++;
                     isConnected = false;
-                    updateConnectionStatus(false, `ניסיון ${connectionRetryCount}/${MAX_RETRY_COUNT}`);
-                    console.error('Connection error:', error);
+                    updateConnectionStatus(false, `שגיאת חיבור ${connectionRetryCount}/${MAX_RETRY_COUNT}`);
+                    console.error('❌ Connection error:', error);
                     
                     if (connectionRetryCount >= MAX_RETRY_COUNT) {
-                        updateConnectionStatus(false, 'שגיאת חיבור');
-                        showNotification('לא ניתן להתחבר לשרת', 'danger');
+                        updateConnectionStatus(false, 'כשל בחיבור');
+                        showNotification('לא ניתן להתחבר לשרת - בדוק חיבור אינטרנט', 'danger');
                     }
                 });
 
                 socket.on('reconnect', (attemptNumber) => {
-                    console.log('Reconnected after', attemptNumber, 'attempts');
+                    console.log('🔄 Reconnected after', attemptNumber, 'attempts');
                     showNotification('התחבר מחדש לשרת', 'success');
                 });
 
                 socket.on('connection-status', (data) => {
-                    updateConnectionStatus(data.connected, data.connected ? 'מחובר (Live)' : 'לא מחובר');
+                    console.log('📊 Connection status:', data);
+                    updateConnectionStatus(data.connected, data.message || (data.connected ? 'מחובר (Live)' : 'לא מחובר'));
+                });
+
+                socket.on('registration-confirmed', (data) => {
+                    console.log('✅ רישום אושר:', data);
+                    showNotification(`נרשמת בהצלחה לעיר ${data.city}`, 'success');
+                });
+
+                socket.on('registration-error', (data) => {
+                    console.error('❌ שגיאה ברישום:', data);
+                    showNotification(`שגיאה ברישום לעיר ${data.city}: ${data.error}`, 'danger');
+                });
+
+                socket.on('pong', (data) => {
+                    console.log('🏓 Pong received:', data);
                 });
 
                 socket.on('alert-update', (alert) => {
+                    console.log('📨 התראה התקבלה:', alert);
                     handleAlertUpdate(alert);
                 });
 
@@ -1094,9 +1118,10 @@
                 });
 
             } catch (error) {
-                console.error('Failed to initialize socket:', error);
+                console.error('❌ Failed to initialize socket:', error);
                 updateConnectionStatus(false, 'שגיאה בהתחברות');
                 updateApiStatus('error', 'שגיאה בחיבור');
+                showNotification('שגיאה בהתחברות לשרת', 'danger');
             }
         }
 
