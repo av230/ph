@@ -1,4 +1,4 @@
-// server.js - מערכת התראות חכמה עם תיקון CSP
+// server.js - מערכת התראות חכמה עם תיקון מלא
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -20,7 +20,7 @@ const io = socketIo(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// נתוני ערים מעודכנים - רשימה מלאה + ערים חסרות
+// נתוני ערים מעודכנים - רשימה מלאה + כל הערים החסרות
 const cityData = {
     'אבו גוש': { zone: 'ירושלים', shelterTime: 90, area: 203, established: 1994 },
     'אבן יהודה': { zone: 'שרון', shelterTime: 90, area: 1083, established: 1932 },
@@ -126,7 +126,7 @@ const cityData = {
     'טירת כרמל': { zone: 'חיפה והכרמל', shelterTime: 60, area: 402, established: 1992 },
     'תל אביב יפו': { zone: 'דן', shelterTime: 90, area: 102, established: 1909 },
     
-    // *** הוספת ערים חסרות שהופיעו בהתראות ***
+    // *** הוספת כל הערים החסרות מהלוג ***
     // אזור ים המלח
     'בתי מלון ים המלח': { zone: 'ים המלח', shelterTime: 60, area: 1301, established: 1960 },
     'מלונות ים המלח מרכז': { zone: 'ים המלח', shelterTime: 60, area: 1302, established: 1960 },
@@ -136,6 +136,99 @@ const cityData = {
     'עין בוקק': { zone: 'ים המלח', shelterTime: 60, area: 1306, established: 1986 },
     'מצדה': { zone: 'ים המלח', shelterTime: 60, area: 1307, established: -73 },
     'עין גדי': { zone: 'ים המלח', shelterTime: 60, area: 1308, established: 1956 },
+    'מרחצאות עין גדי': { zone: 'ים המלח', shelterTime: 60, area: 1309 },
+    
+    // אזורי תעשייה מהדרום
+    'אורון תעשייה ומסחר': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1400 },
+    'אזור תעשייה דימונה': { zone: 'באר שבע והנגב', shelterTime: 90, area: 1401 },
+    'אזור תעשייה עידן הנגב': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1402 },
+    'אזור תעשייה רותם': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1403 },
+    'אזור תעשייה צפוני אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 45, area: 1420 },
+    'אזור תעשייה הדרומי אשקלון': { zone: 'אשקלון והסביבה', shelterTime: 45, area: 1421 },
+    'אזור תעשייה נ.ע.מ': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1422 },
+    'אזור תעשייה מיתרים': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1423 },
+    
+    // יישובי דרום נוספים
+    'אל פורעה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1404 },
+    'בית קמה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1405 },
+    'גבעות בר': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1406 },
+    'גבעות גורל': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1407 },
+    'דביר': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1408 },
+    'הר הנגב': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1409 },
+    'ירוחם': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1410 },
+    'כסייפה': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1411 },
+    'להב': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1412 },
+    'להבים': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1413 },
+    'מרעית': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1414 },
+    'משמר הנגב': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1415 },
+    'קסר א-סר': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1416 },
+    'שובל': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1417 },
+    'תארבין': { zone: 'באר שבע והנגב', shelterTime: 60, area: 1418 },
+    'תל ערד': { zone: 'באר שבע והנגב', shelterTime: 90, area: 1419 },
+    
+    // עוטף עזה - יישובים נוספים שחסרו
+    'אבשלום': { zone: 'עוטף עזה', shelterTime: 15, area: 1430 },
+    'אורים': { zone: 'עוטף עזה', shelterTime: 15, area: 1431 },
+    'ארז': { zone: 'עוטף עזה', shelterTime: 15, area: 1432 },
+    'אשבול': { zone: 'עוטף עזה', shelterTime: 15, area: 1433 },
+    'בארי': { zone: 'עוטף עזה', shelterTime: 15, area: 1434 },
+    'בית שקמה': { zone: 'עוטף עזה', shelterTime: 15, area: 1435 },
+    'בני נצרים': { zone: 'עוטף עזה', shelterTime: 15, area: 1436 },
+    'ברור חיל': { zone: 'עוטף עזה', shelterTime: 15, area: 1437 },
+    'ברוש': { zone: 'עוטף עזה', shelterTime: 15, area: 1438 },
+    'בת הדר': { zone: 'עוטף עזה', shelterTime: 15, area: 1439 },
+    'גברעם': { zone: 'עוטף עזה', shelterTime: 15, area: 1440 },
+    'גיאה': { zone: 'עוטף עזה', shelterTime: 15, area: 1441 },
+    'דורות': { zone: 'עוטף עזה', shelterTime: 15, area: 1442 },
+    'דקל': { zone: 'עוטף עזה', shelterTime: 15, area: 1443 },
+    'זיקים': { zone: 'עוטף עזה', shelterTime: 15, area: 1444 },
+    'זמרת': { zone: 'עוטף עזה', shelterTime: 15, area: 1445 },
+    'זרועה': { zone: 'עוטף עזה', shelterTime: 15, area: 1446 },
+    'חולית': { zone: 'עוטף עזה', shelterTime: 15, area: 1447 },
+    'חלץ': { zone: 'עוטף עזה', shelterTime: 15, area: 1448 },
+    'יבול': { zone: 'עוטף עזה', shelterTime: 15, area: 1449 },
+    'יד מרדכי': { zone: 'עוטף עזה', shelterTime: 15, area: 1450 },
+    'יושיביה': { zone: 'עוטף עזה', shelterTime: 15, area: 1451 },
+    'יכיני': { zone: 'עוטף עזה', shelterTime: 15, area: 1452 },
+    'יתד': { zone: 'עוטף עזה', shelterTime: 15, area: 1453 },
+    'כיסופים': { zone: 'עוטף עזה', shelterTime: 15, area: 1454 },
+    'כרם שלום': { zone: 'עוטף עזה', shelterTime: 15, area: 1455 },
+    'כרמיה': { zone: 'עוטף עזה', shelterTime: 15, area: 1456 },
+    'מבועים': { zone: 'עוטף עזה', shelterTime: 15, area: 1457 },
+    'מבטחים': { zone: 'עוטף עזה', shelterTime: 15, area: 1458 },
+    'מבקיעים': { zone: 'עוטף עזה', shelterTime: 15, area: 1459 },
+    'מגן': { zone: 'עוטף עזה', shelterTime: 15, area: 1460 },
+    'מפלסים': { zone: 'עוטף עזה', shelterTime: 15, area: 1461 },
+    'נווה': { zone: 'עוטף עזה', shelterTime: 15, area: 1462 },
+    'ניר יצחק': { zone: 'עוטף עזה', shelterTime: 15, area: 1463 },
+    'ניר משה': { zone: 'עוטף עזה', shelterTime: 15, area: 1464 },
+    'ניר עוז': { zone: 'עוטף עזה', shelterTime: 15, area: 1465 },
+    'ניר עקיבא': { zone: 'עוטף עזה', shelterTime: 15, area: 1466 },
+    'נירים': { zone: 'עוטף עזה', shelterTime: 15, area: 1467 },
+    'נתיב העשרה': { zone: 'עוטף עזה', shelterTime: 15, area: 1468 },
+    'סופה': { zone: 'עוטף עזה', shelterTime: 15, area: 1469 },
+    'סעד': { zone: 'עוטף עזה', shelterTime: 15, area: 1470 },
+    'עין הבשור': { zone: 'עוטף עזה', shelterTime: 15, area: 1471 },
+    'עין השלושה': { zone: 'עוטף עזה', shelterTime: 15, area: 1472 },
+    'עלומים': { zone: 'עוטף עזה', shelterTime: 15, area: 1473 },
+    'פטיש': { zone: 'עוטף עזה', shelterTime: 15, area: 1474 },
+    'פרי גן': { zone: 'עוטף עזה', shelterTime: 15, area: 1475 },
+    'קלחים': { zone: 'עוטף עזה', shelterTime: 15, area: 1476 },
+    'רוחמה': { zone: 'עוטף עזה', shelterTime: 15, area: 1477 },
+    'רעים': { zone: 'עוטף עזה', shelterTime: 15, area: 1478 },
+    'שבי דרום': { zone: 'עוטף עזה', shelterTime: 15, area: 1479 },
+    'שדה ניצן': { zone: 'עוטף עזה', shelterTime: 15, area: 1480 },
+    'שדה צבי': { zone: 'עוטף עזה', shelterTime: 15, area: 1481 },
+    'שדי אברהם': { zone: 'עוטף עזה', shelterTime: 15, area: 1482 },
+    'שוקדה': { zone: 'עוטף עזה', shelterTime: 15, area: 1483 },
+    'שיבולים': { zone: 'עוטף עזה', shelterTime: 15, area: 1484 },
+    'שלומית': { zone: 'עוטף עזה', shelterTime: 15, area: 1485 },
+    'שרשרת': { zone: 'עוטף עזה', shelterTime: 15, area: 1486 },
+    'תאשור': { zone: 'עוטף עזה', shelterTime: 15, area: 1487 },
+    'תדהר': { zone: 'עוטף עזה', shelterTime: 15, area: 1488 },
+    'תלמי אליהו': { zone: 'עוטף עזה', shelterTime: 15, area: 1489 },
+    'תלמי יוסף': { zone: 'עוטף עזה', shelterTime: 15, area: 1490 },
+    'תלמי יפה': { zone: 'עוטף עזה', shelterTime: 15, area: 1491 },
     
     // יישובי גבול נוספים
     'מתת': { zone: 'גליל עליון', shelterTime: 15, area: 144, established: 1980 },
@@ -145,7 +238,7 @@ const cityData = {
     'הגושרים': { zone: 'גליל עליון', shelterTime: 15, area: 148, established: 1948 },
     'נאות מרדכי': { zone: 'גליל עליון', shelterTime: 15, area: 149, established: 1946 },
     
-    // אזור עוטף עזה
+    // יישובים נוספים מהלוג
     'שדה אברהם': { zone: 'עוטף עזה', shelterTime: 15, area: 1310, established: 1982 },
     'תקומה': { zone: 'עוטף עזה', shelterTime: 15, area: 1311, established: 1949 },
     'ניר עם': { zone: 'עוטף עזה', shelterTime: 15, area: 1312, established: 1943 },
@@ -156,8 +249,9 @@ const cityData = {
 
 // מילון קיצורים וכינויים לערים
 const cityAliases = {
-    'ת"א': 'תל אביב',
-    'תא': 'תל אביב',
+    'ת"א': 'תל אביב יפו',
+    'תא': 'תל אביב יפו',
+    'תל אביב': 'תל אביב יפו',
     'ירושלים': ['ירושלים', 'מעלה אדומים', 'בית שמש'],
     'ב"ש': 'באר שבע',
     'בש': 'באר שבע',
@@ -199,7 +293,7 @@ app.use(helmet({
             connectSrc: ["'self'", "wss:", "ws:", "https:", "netfree.link"],
             imgSrc: ["'self'", "data:", "https:", "netfree.link"],
             fontSrc: ["'self'", "https:", "data:", "netfree.link"],
-            mediaSrc: ["'self'", "data:", "blob:", "netfree.link"], // הוספת תמיכה באודיו
+            mediaSrc: ["'self'", "data:", "blob:", "netfree.link"],
             objectSrc: ["'none'"],
             upgradeInsecureRequests: [],
         }
@@ -333,7 +427,7 @@ function getCityMatchesFromAlert(alertCities) {
             
             // Fuzzy matching - דמיון חלקי
             const similarity = calculateSimilarity(alertCity, ourCityLower);
-            if (similarity > 0.75) { // הורדתי ל-75% לגמישות יותר
+            if (similarity > 0.75) { 
                 matches.push(ourCity);
                 formatLogMessage('debug', 'CityMatch', `התאמת דמיון: "${alertCity}" -> "${ourCity}" (${Math.round(similarity * 100)}%)`);
                 break;
@@ -356,7 +450,7 @@ function getCityMatchesFromAlert(alertCities) {
     return [...new Set(matches)];
 }
 
-// *** מיפוי סוגי התראות מתוקן לפי המפרט הרשמי ***
+// *** מיפוי סוגי התראות מתוקן לפי המפרט הרשמי + תיקון קטגוריה 10 ***
 function mapAlertTypeFromKore(koreAlert) {
     if (!koreAlert || !koreAlert.title) {
         return {
@@ -369,16 +463,18 @@ function mapAlertTypeFromKore(koreAlert) {
         };
     }
     
-    // מיפוי קטגוריות לפי המפרט הרשמי
+    // *** מיפוי קטגוריות לפי המפרט הרשמי + הוספת קטגוריה 10 ***
     const categoryMap = {
         '1': 'missiles',        // רקטות וטילים  
         '2': 'radiologicalEvent', // אירוע רדיולוגי
         '3': 'earthQuake',      // רעידת אדמה
         '4': 'tsunami',         // צונאמי
         '5': 'hostileAircraftIntrusion', // חדירת כלי טיס
-        '6': 'newsFlash',       // התראה מוקדמת / יציאה מממ"ד !!! זה הקטע החשוב !!!
+        '6': 'newsFlash',       // התראה מוקדמת / יציאה מממ"ד
         '7': 'hazardousMaterials', // חומרים מסוכנים
         '8': 'terroristInfiltration', // הסתננות
+        '9': 'general',         // כללית
+        '10': 'allClear',       // *** זה הקטגוריה שחסרה! יציאה מממ"ד ***
         '101': 'missilesDrill', // תרגיל טילים
         '102': 'radiologicalEventDrill',
         '103': 'earthQuakeDrill',
@@ -400,6 +496,37 @@ function mapAlertTypeFromKore(koreAlert) {
         desc: koreAlert.desc
     });
     
+    // *** תיקון מיוחד לקטגוריה 10 - יציאה מממ"ד ***
+    if (officialType === 'allClear' || koreAlert.cat === '10') {
+        formatLogMessage('info', 'AlertMapping', '🟢 זוהה כהתראת יציאה (קטגוריה 10)', { 
+            desc: koreAlert.desc,
+            cat: koreAlert.cat 
+        });
+        return {
+            type: 'all-clear',
+            title: 'יציאה מהממ"ד',
+            icon: '🟢',
+            description: 'הסכנה חלפה תודה לאל - ניתן לצאת מהחדר המוגן',
+            severity: 'low',
+            class: 'safe'
+        };
+    }
+    
+    // בדיקה נוספת לפי תוכן התיאור - למקרה שהקטגוריה לא נכונה
+    if (desc.includes('יכולים לצאת') || desc.includes('השוהים במרחב המוגן') || 
+        desc.includes('האירוע הסתיים') || title.includes('יציאה') ||
+        desc.includes('בטוח לצאת') || desc.includes('הסרת התראה')) {
+        formatLogMessage('info', 'AlertMapping', '🟢 זוהה כהתראת יציאה לפי תוכן', { desc: koreAlert.desc });
+        return {
+            type: 'all-clear',
+            title: 'יציאה מהממ"ד',
+            icon: '🟢',
+            description: 'הסכנה חלפה תודה לאל - ניתן לצאת מהחדר המוגן',
+            severity: 'low',
+            class: 'safe'
+        };
+    }
+    
     // לוגיקה מתוקנת לפי המפרט הרשמי
     switch (officialType) {
         case 'missiles':
@@ -413,12 +540,11 @@ function mapAlertTypeFromKore(koreAlert) {
             };
             
         case 'newsFlash':
-            // *** זה הקטע החשוב! newsFlash יכול להיות גם התראה מוקדמת וגם "בטוח לצאת" ***
-            // צריך לבדוק את התיאור כדי להבין מה זה
+            // זה הקטע החשוב! newsFlash יכול להיות גם התראה מוקדמת וגם "בטוח לצאת"
             if (desc.includes('בטוח') || desc.includes('לצאת') || 
                 desc.includes('יציאה') || desc.includes('הסרת') || 
                 title.includes('יציאה') || title.includes('ביטול')) {
-                formatLogMessage('info', 'AlertMapping', 'זוהה כהתראת יציאה', { desc: koreAlert.desc });
+                formatLogMessage('info', 'AlertMapping', '🟢 newsFlash זוהה כיציאה', { desc: koreAlert.desc });
                 return {
                     type: 'all-clear',
                     title: 'יציאה מהממ"ד',
@@ -429,7 +555,7 @@ function mapAlertTypeFromKore(koreAlert) {
                 };
             } else if (desc.includes('היכנסו') || desc.includes('מרחב מוגן') || 
                       desc.includes('ממ"ד') || desc.includes('מקלט')) {
-                formatLogMessage('info', 'AlertMapping', 'זוהה כהתראת כניסה לממ"ד', { desc: koreAlert.desc });
+                formatLogMessage('info', 'AlertMapping', '🚨 newsFlash זוהה ככניסה', { desc: koreAlert.desc });
                 return {
                     type: 'shelter',
                     title: 'היכנסו לממ"ד מיידית!',
@@ -439,7 +565,7 @@ function mapAlertTypeFromKore(koreAlert) {
                     class: 'danger'
                 };
             } else {
-                formatLogMessage('info', 'AlertMapping', 'זוהה כהתראה מוקדמת', { desc: koreAlert.desc });
+                formatLogMessage('info', 'AlertMapping', '⚠️ newsFlash זוהה כהתראה מוקדמת', { desc: koreAlert.desc });
                 return {
                     type: 'early-warning',
                     title: 'התראה מוקדמת',
@@ -528,9 +654,10 @@ function mapAlertTypeFromKore(koreAlert) {
             };
             
         default:
-            formatLogMessage('warning', 'AlertMapping', 'סוג התראה לא מוכר', { 
+            formatLogMessage('warning', 'AlertMapping', '❓ סוג התראה לא מוכר', { 
                 category: koreAlert.cat, 
-                officialType: officialType 
+                officialType: officialType,
+                title: koreAlert.title 
             });
             return {
                 type: 'unknown',
@@ -580,7 +707,6 @@ app.get('/api/alerts/history/:city?', async (req, res) => {
         try {
             formatLogMessage('info', 'History', `טוען היסטוריה עבור ${city}`);
             
-            // נסה להשתמש ב-API של פיקוד העורף לקבלת היסטוריה
             const response = await axios.get(
                 `https://alerts-history.oref.org.il/Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1&city_0=${encodeURIComponent(city)}`, 
                 { timeout: 10000 }
@@ -600,7 +726,6 @@ app.get('/api/alerts/history/:city?', async (req, res) => {
         } catch (error) {
             formatLogMessage('error', 'History', `שגיאה בטעינת היסטוריה עבור ${city}`, error.message);
             
-            // חזור להיסטוריה מקומית
             const localHistory = alertHistory.filter(alert => 
                 !alert.cities || alert.cities.length === 0 || alert.cities.includes(city)
             ).slice(0, 50);
@@ -670,7 +795,7 @@ io.on('connection', (socket) => {
     });
     
     socket.on('register-city', (cityName) => {
-        formatLogMessage('info', 'Registration', `משתמש ${socket.id} נרשם לעיר: ${cityName}`);
+        formatLogMessage('info', 'Registration', `🏙️ משתמש ${socket.id} נרשם לעיר: ${cityName}`);
         connectedUsers.set(socket.id, { 
             cityName, 
             connectedAt: new Date(),
@@ -702,26 +827,90 @@ io.on('connection', (socket) => {
     });
 });
 
-// פונקציות התראות
+// *** פונקציית התראות מתוקנת - תיקון חמור לבעיית השליחה לכולם ***
 function notifyRelevantUsers(alert) {
+    // *** בדיקה מחמירה - לא לשלוח התראות אם אין ערים מוגדרות! ***
     if (!alert.cities || alert.cities.length === 0) {
-        io.emit('alert-update', alert);
-        formatLogMessage('info', 'Notification', `שולח התראה כללית ל-${connectedUsers.size} משתמשים`);
+        formatLogMessage('error', 'Notification', '🚨 התראה ללא ערים מוגדרות - לא שולח לאף אחד!', {
+            alertType: alert.type,
+            originalCities: alert.originalCities?.length || 0,
+            alertTitle: alert.title
+        });
+        // *** לא שולחים התראה אם אין ערים מוגדרות! ***
         return;
     }
     
     let notifiedCount = 0;
+    let shouldNotifyUsers = [];
+    
+    // *** לוג לפני בדיקת המשתמשים ***
+    formatLogMessage('debug', 'Notification', '🔍 בודק משתמשים מחוברים', {
+        totalConnectedUsers: connectedUsers.size,
+        connectedUsersCities: Array.from(connectedUsers.values()).map(u => u.cityName),
+        alertAffectedCities: alert.cities,
+        alertType: alert.type
+    });
+    
+    // בדיקה מדוייקת של כל משתמש
     connectedUsers.forEach((userData, socketId) => {
-        if (alert.cities.includes(userData.cityName)) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
-                socket.emit('alert-update', alert);
-                notifiedCount++;
-            }
+        const isAffected = alert.cities.includes(userData.cityName);
+        
+        formatLogMessage('debug', 'Notification', `🔍 בודק משתמש ${socketId}`, {
+            userCity: userData.cityName,
+            isAffected: isAffected,
+            alertCities: alert.cities
+        });
+        
+        if (isAffected) {
+            shouldNotifyUsers.push({
+                socketId: socketId,
+                city: userData.cityName
+            });
         }
     });
     
-    formatLogMessage('info', 'Notification', `שולח התראה ל-${notifiedCount} משתמשים בערים: ${alert.cities.join(', ')}`);
+    formatLogMessage('info', 'Notification', `📊 סטטיסטיקת התראה`, {
+        alertType: alert.type,
+        affectedCities: alert.cities,
+        totalConnectedUsers: connectedUsers.size,
+        usersToNotify: shouldNotifyUsers.length,
+        usersByCity: shouldNotifyUsers.map(u => u.city)
+    });
+    
+    // *** בדיקה מיוחדת למקרה של בני ברק ***
+    const bneiBrakUsers = shouldNotifyUsers.filter(user => 
+        user.city === 'בני ברק' || user.city.includes('בני ברק')
+    );
+    
+    if (bneiBrakUsers.length > 0) {
+        formatLogMessage('error', 'Notification', '🚨 זוהו משתמשים בבני ברק!', {
+            bneiBrakUsers: bneiBrakUsers.length,
+            alertCities: alert.cities,
+            shouldReceiveAlert: alert.cities.includes('בני ברק'),
+            alertType: alert.type
+        });
+    }
+    
+    // שליחה רק למשתמשים רלוונטיים
+    shouldNotifyUsers.forEach(userInfo => {
+        const socket = io.sockets.sockets.get(userInfo.socketId);
+        if (socket) {
+            socket.emit('alert-update', alert);
+            notifiedCount++;
+            formatLogMessage('debug', 'Notification', `📤 שלח התראה למשתמש`, {
+                socketId: userInfo.socketId,
+                city: userInfo.city,
+                alertType: alert.type
+            });
+        }
+    });
+    
+    formatLogMessage('success', 'Notification', `✅ שלח התראה ל-${notifiedCount} משתמשים`, {
+        cities: alert.cities,
+        notifiedCount: notifiedCount,
+        totalConnected: connectedUsers.size,
+        alertType: alert.type
+    });
 }
 
 function saveToHistory(alert) {
@@ -797,12 +986,12 @@ async function checkKoreAPI() {
             if (lastAlertId !== alertData.id) {
                 lastAlertId = alertData.id;
                 
-                formatLogMessage('info', 'KoreAPI', 'התראה חדשה התקבלה', {
+                formatLogMessage('info', 'KoreAPI', '📥 התראה חדשה התקבלה', {
                     id: alertData.id,
                     cat: alertData.cat,
                     title: alertData.title,
                     desc: alertData.desc,
-                    data: alertData.data
+                    citiesCount: alertData.data?.length || 0
                 });
                 
                 const categorized = mapAlertTypeFromKore(alertData);
@@ -818,10 +1007,11 @@ async function checkKoreAPI() {
                     source: 'kore-api'
                 };
                 
-                formatLogMessage('success', 'KoreAPI', `התראה מעובדת: ${enrichedAlert.type}`, {
-                    cities: enrichedAlert.cities,
-                    originalCities: enrichedAlert.originalCities,
-                    mappedType: categorized.type
+                formatLogMessage('success', 'KoreAPI', `✅ התראה מעובדת: ${enrichedAlert.type}`, {
+                    originalCitiesCount: enrichedAlert.originalCities?.length || 0,
+                    matchedCitiesCount: enrichedAlert.cities?.length || 0,
+                    mappedType: categorized.type,
+                    category: alertData.cat
                 });
                 
                 lastAlert = enrichedAlert;
@@ -1071,7 +1261,7 @@ app.get('/health', (req, res) => {
         alerts: alertHistory.length,
         timestamp: new Date().toISOString(),
         apis: 'kore.co.il, pikud-haoref',
-        version: '2.0.1-fixed'
+        version: '2.1.0-emergency-fix'
     });
 });
 
@@ -1176,7 +1366,7 @@ function startServer() {
         formatLogMessage('info', 'Server', `📚 היסטוריה: ${alertHistory.length} רשומות`);
         formatLogMessage('info', 'Server', `🛡️ אבטחה: Helmet, Compression, Rate Limiting`);
         formatLogMessage('info', 'Server', `⚡ תכונות: Cache, Health Monitoring, Fuzzy Matching`);
-        formatLogMessage('info', 'Server', `🔧 תיקונים: מיפוי תקין לפי המפרט הרשמי`);
+        formatLogMessage('info', 'Server', `🔧 תיקונים: קטגוריה 10, בעיית התפשטות, מיפוי נכון`);
         
         startAlertMonitoring();
         setupHeartbeat();
@@ -1186,12 +1376,10 @@ function startServer() {
 // טיפול בשגיאות מתקדם
 process.on('uncaughtException', (error) => {
     formatLogMessage('error', 'Process', '🚨 Uncaught Exception', error.message);
-    // לא נעצור את השרת - נמשיך לפעול
 });
 
 process.on('unhandledRejection', (reason, promise) => {
     formatLogMessage('error', 'Process', '🚨 Unhandled Rejection', reason);
-    // לא נעצור את השרת - נמשיך לפעול
 });
 
 process.on('SIGINT', () => {
@@ -1208,13 +1396,11 @@ process.on('SIGTERM', () => {
 function gracefulShutdown() {
     formatLogMessage('info', 'Shutdown', 'מתחיל סגירה חלקה');
     
-    // הודע למשתמשים
     io.emit('server-shutdown', {
         message: 'השרת עובר לתחזוקה, יחזור בקרוב',
         timestamp: new Date().toISOString()
     });
     
-    // סגור חיבורים
     server.close((err) => {
         if (err) {
             formatLogMessage('error', 'Shutdown', 'שגיאה בסגירת השרת', err.message);
@@ -1225,7 +1411,6 @@ function gracefulShutdown() {
         process.exit(0);
     });
     
-    // כפה סגירה אחרי 10 שניות
     setTimeout(() => {
         formatLogMessage('warning', 'Shutdown', '⏰ כפה סגירה אחרי timeout');
         process.exit(1);
