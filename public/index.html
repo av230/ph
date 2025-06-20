@@ -25,7 +25,6 @@
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            margin: 0 auto;
             background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
@@ -223,7 +222,7 @@
             background: #cbd5e0;
         }
 
-        .mute-btn {
+        .mute-btn, .voice-btn, .audio-init-btn {
             background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
             color: white;
             border: none;
@@ -235,7 +234,7 @@
             box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
         }
 
-        .mute-btn:hover {
+        .mute-btn:hover, .voice-btn:hover, .audio-init-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(66, 153, 225, 0.4);
         }
@@ -243,6 +242,21 @@
         .mute-btn.muted {
             background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
             box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
+        }
+
+        .voice-btn.enabled {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+        }
+
+        .audio-init-btn {
+            background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+            box-shadow: 0 4px 15px rgba(159, 122, 234, 0.3);
+        }
+
+        .audio-init-btn.activated {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
         }
 
         .status-grid {
@@ -685,11 +699,15 @@
                 </select>
                 
                 <div class="audio-controls">
+                    <button id="audioInitBtn" class="audio-init-btn">🎵 הפעל מערכת שמע</button>
+                    
                     <div class="volume-control">
                         <label for="volume">🔊 עוצמת קול</label>
                         <input type="range" id="volume" class="volume-slider" min="0" max="1" step="0.1" value="0.5">
                     </div>
+                    
                     <button id="mute" class="mute-btn">השתק</button>
+                    <button id="voiceAlerts" class="voice-btn">🗣️ התראות קוליות</button>
                 </div>
             </div>
 
@@ -773,17 +791,18 @@
                     
                     <div class="developer-credit">
                         <h4>💻 פיתוח מערכת:</h4>
-                       <p>
-    נבנה לשימוש אישי על ידי <strong>AV-DIGITAL.CO.IL</strong><br>
-    <span class="subtitle">מערכות חכמות לעמותות</span><br>
-    בקוד פתוח עם השראה וידע מ-<a href="https://tchumim.com/" target="_blank" rel="noopener noreferrer">פורום תחומים</a>
-</p>
+                        <p>
+                            נבנה לשימוש אישי על ידי <strong>AV-DIGITAL.CO.IL</strong><br>
+                            <span class="subtitle">מערכות חכמות לעמותות</span><br>
+                            בקוד פתוח עם השראה וידע מ-<a href="https://tchumim.com/" target="_blank" rel="noopener noreferrer">פורום תחומים</a>
+                        </p>
                         
                         <div class="tech-stack">
                             <span class="tech-tag">Node.js</span>
                             <span class="tech-tag">Socket.IO</span>
                             <span class="tech-tag">Express</span>
                             <span class="tech-tag">Web Audio API</span>
+                            <span class="tech-tag">Speech Synthesis</span>
                         </div>
                     </div>
                 </div>
@@ -806,9 +825,11 @@
         let lastAlertId = null;
         let isConnected = false;
         let isMuted = localStorage.getItem('isMuted') === 'true';
+        let isVoiceEnabled = localStorage.getItem('voiceEnabled') === 'true';
         let currentVolume = parseFloat(localStorage.getItem('volume')) || 0.5;
         let connectionRetryCount = 0;
         const MAX_RETRY_COUNT = 5;
+        let audioInitialized = false;
 
         // DOM elements
         const connectionStatus = document.getElementById('connectionStatus');
@@ -816,6 +837,8 @@
         const cityInput = document.getElementById('cityInput');
         const volumeControl = document.getElementById('volume');
         const muteButton = document.getElementById('mute');
+        const voiceButton = document.getElementById('voiceAlerts');
+        const audioInitButton = document.getElementById('audioInitBtn');
         const alertSystem = document.getElementById('alertSystem');
         const currentStatus = document.getElementById('currentStatus');
         const registeredCity = document.getElementById('registeredCity');
@@ -836,7 +859,15 @@
             'קצרין': { zone: 'גולן', shelterTime: 60, area: 142, established: 1977 }
         };
 
-        // *** תיקון 1: שמירת עיר נבחרת ב-localStorage ***
+        // Voice messages templates
+        const voiceMessages = {
+            'shelter': (city) => `${city} - היכנסו למרחב המוגן מיידית! ${city} - היכנסו למרחב המוגן מיידית!`,
+            'all-clear': (city) => `${city} - ניתן לצאת מהמרחב המוגן. הסכנה חלפה תודה לאל.`,
+            'early-warning': (city) => `${city} - התראה מוקדמת. היו מוכנים.`,
+            'safe': (city) => `${city} - מצב רגיל. אין התראות פעילות.`,
+            'drill': (city) => `${city} - תרגיל. פעלו לפי ההוראות.`
+        };
+
         function saveSelectedCity(cityName) {
             if (cityName) {
                 localStorage.setItem('selectedCity', cityName);
@@ -847,7 +878,6 @@
         function loadSavedCity() {
             const savedCity = localStorage.getItem('selectedCity');
             if (savedCity && cityInput.options) {
-                // בדוק אם העיר קיימת ברשימה
                 for (let i = 0; i < cityInput.options.length; i++) {
                     if (cityInput.options[i].value === savedCity) {
                         cityInput.value = savedCity;
@@ -859,11 +889,9 @@
             return null;
         }
 
-        // *** תיקון 2: איפוס מצב התראה כשמחליפים עיר ***
         function resetAlertState() {
             console.log('🔄 מאפס מצב התראות');
             
-            // איפוס התצוגה למצב רגיל
             const statusCard = currentStatus;
             const statusIcon = statusCard.querySelector('.status-icon');
             const statusTitle = statusCard.querySelector('.status-title');
@@ -875,59 +903,42 @@
             statusDescription.textContent = 'אין התראות פעילות באזור שלך';
             shelterTime.textContent = 'מידע יופיע בעת התראה';
             
-            // איפוס כותרת הדף
             document.title = 'מערכת התראות חכמה - פיקוד העורף';
             
-            // איפוס היסטוריה מקומית
             alertHistory = [];
             renderHistory();
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('🚀 טוען מערכת התראות');
-            
-            initializeAudio();
-            initializeSocket();
-            
-            // *** טען עיר שמורה אחרי טעינת הערים ***
-            loadCities().then(() => {
-                const savedCity = loadSavedCity();
-                if (savedCity) {
-                    console.log('🔄 אוטו-בחירת עיר שמורה:', savedCity);
-                    // *** רק הצג, אל תרשום אוטומטית ***
-                    showNotification(`נטענה עיר שמורה: ${savedCity}`, 'info');
-                }
-            });
-            
-            setupEventListeners();
-            
-            // Show initial status
-            updateConnectionStatus(false, 'מתחבר לשרת...');
-            updateApiStatus('checking', 'בודק מקורות נתונים...');
-        });
-
+        // Initialize audio with user interaction
         function initializeAudio() {
-            volumeControl.value = currentVolume;
-            muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
-            muteButton.classList.toggle('muted', isMuted);
+            if (audioInitialized) return Promise.resolve();
             
-            // Initialize Web Audio API
             try {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 gainNode = audioContext.createGain();
                 gainNode.connect(audioContext.destination);
                 updateAudioVolume();
+                audioInitialized = true;
+                
+                audioInitButton.textContent = '✅ מערכת שמע פעילה';
+                audioInitButton.classList.add('activated');
+                audioInitButton.disabled = true;
+                
+                console.log('🎵 מערכת שמע הופעלה בהצלחה');
+                showNotification('מערכת השמע הופעלה בהצלחה', 'success');
+                
+                return Promise.resolve();
             } catch (error) {
                 console.warn('Web Audio API not supported:', error);
+                showNotification('שגיאה בהפעלת מערכת השמע', 'warning');
+                return Promise.reject(error);
             }
         }
 
         function generateAlertSound(type) {
-            if (!audioContext || isMuted) return;
+            if (!audioContext || isMuted || !audioInitialized) return;
 
             try {
-                // Resume audio context if suspended
                 if (audioContext.state === 'suspended') {
                     audioContext.resume();
                 }
@@ -938,20 +949,16 @@
                 oscillator.connect(envelope);
                 envelope.connect(gainNode);
 
-                // Different sounds for different alert types
                 switch (type) {
                     case 'shelter':
-                        // Urgent siren-like sound
                         oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
                         oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.5);
                         oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 1);
                         break;
                     case 'early-warning':
-                        // Warning beep
                         oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
                         break;
                     case 'all-clear':
-                        // Pleasant tone
                         oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
                         oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.5);
                         break;
@@ -961,7 +968,6 @@
 
                 oscillator.type = 'sine';
                 
-                // Envelope
                 envelope.gain.setValueAtTime(0, audioContext.currentTime);
                 envelope.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
                 envelope.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
@@ -971,6 +977,25 @@
                 
             } catch (error) {
                 console.warn('Error generating alert sound:', error);
+            }
+        }
+
+        // Voice synthesis function
+        function speakAlert(message) {
+            if (!isVoiceEnabled || isMuted) return;
+            
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(message);
+                utterance.lang = 'he-IL';
+                utterance.rate = 0.8;
+                utterance.pitch = 1.0;
+                utterance.volume = currentVolume;
+                
+                window.speechSynthesis.speak(utterance);
+                console.log('🗣️ הודעה קולית:', message);
+            } else {
+                console.warn('Speech synthesis not supported');
+                showNotification('הודעות קוליות לא נתמכות בדפדפן זה', 'warning');
             }
         }
 
@@ -991,15 +1016,12 @@
                     showNotification('התחבר לשרת בהצלחה', 'success');
                     console.log('✅ Connected to server');
                     
-                    // Enable city selection
                     cityInput.disabled = false;
                     
-                    // *** אם יש עיר נבחרת, רשום אותה מחדש ***
+                    // תיקון: אם יש עיר נבחרת, הפעל את כל התהליך מחדש
                     if (currentCity) {
-                        console.log('🔄 רושם מחדש עיר אחרי חיבור:', currentCity);
-                        resetAlertState(); // איפוס לפני רישום מחדש
-                        socket.emit('register-city', currentCity);
-                        socket.emit('get-history', currentCity);
+                        console.log('🔄 מפעיל מחדש עיר אחרי חיבור:', currentCity);
+                        triggerCityRegistration(currentCity);
                     }
                 });
 
@@ -1033,7 +1055,6 @@
                     updateConnectionStatus(data.connected, data.connected ? 'מחובר (Live)' : 'לא מחובר');
                 });
 
-                // *** עדכון טיפול בהתראות - תיקון חמור ***
                 socket.on('alert-update', (alert) => {
                     handleAlertUpdate(alert);
                 });
@@ -1053,7 +1074,6 @@
                 socket.on('heartbeat', (data) => {
                     updateConnectionStatus(true, `מחובר (${data.connectedUsers} משתמשים)`);
                     
-                    // Update API status based on heartbeat
                     if (data.apiStatus) {
                         const koreStatus = data.apiStatus.kore;
                         const orefStatus = data.apiStatus.oref;
@@ -1080,7 +1100,6 @@
             }
         }
 
-        // *** תיקון 3: עדכון פונקציית טעינת ערים ***
         async function loadCities() {
             try {
                 const response = await fetch('/api/cities');
@@ -1099,12 +1118,11 @@
                 cityInput.disabled = false;
                 console.log(`✅ נטענו ${cities.length} ערים`);
                 
-                return Promise.resolve(); // החזר Promise
+                return Promise.resolve();
                 
             } catch (error) {
                 console.error('❌ שגיאה בטעינת ערים:', error);
                 
-                // Fallback to hardcoded cities
                 cityInput.innerHTML = '<option value="">בחר עיר</option>';
                 Object.keys(cityDataFallback || {}).forEach(city => {
                     const option = document.createElement('option');
@@ -1124,37 +1142,47 @@
             cityInput.addEventListener('change', registerCity);
             volumeControl.addEventListener('input', updateVolume);
             muteButton.addEventListener('click', toggleMute);
+            voiceButton.addEventListener('click', toggleVoice);
+            audioInitButton.addEventListener('click', initializeAudio);
             refreshBtn.addEventListener('click', refreshHistory);
         }
 
-        // *** תיקון 4: פונקציה מתוקנת לרישום עיר ***
+        // תיקון: פונקציה נפרדת להפעלת רישום עיר
+        function triggerCityRegistration(city) {
+            console.log('🔧 מפעיל רישום עיר באופן פרוגרמטי:', city);
+            
+            resetAlertState();
+            currentCity = city;
+            registeredCity.textContent = city;
+            alertSystem.style.display = 'block';
+            alertSystem.classList.add('fade-in');
+            
+            if (socket && socket.connected) {
+                socket.emit('register-city', city);
+                socket.emit('get-history', city);
+            }
+            
+            updateStatusTime();
+            if (!window.statusTimeInterval) {
+                window.statusTimeInterval = setInterval(updateStatusTime, 1000);
+            }
+        }
+
         function registerCity() {
             const city = cityInput.value;
             if (!city) return;
 
             console.log('📝 רושם עיר:', city);
 
-            // *** תיקון חמור: איפוס מידע קודם תמיד כשמחליפים עיר ***
             if (currentCity !== city) {
                 console.log('🔄 מחליף עיר מ-' + currentCity + ' ל-' + city);
-                resetAlertState();
-                currentCity = city;
-                saveSelectedCity(city); // שמירה ב-localStorage
+                saveSelectedCity(city);
+                showNotification(`נרשמת בהצלחה להתראות עבור ${city}`, 'success');
             }
 
-            registeredCity.textContent = city;
-            alertSystem.style.display = 'block';
-            alertSystem.classList.add('fade-in');
+            // הפעל את תהליך הרישום המלא
+            triggerCityRegistration(city);
             
-            if (socket && socket.connected) {
-                // *** בקש מהשרת להתחיל מאפס עבור העיר החדשה ***
-                socket.emit('register-city', city);
-                socket.emit('get-history', city);
-            }
-            
-            showNotification(`נרשמת בהצלחה להתראות עבור ${city}`, 'success');
-            
-            // Start real-time updates
             updateStatusTime();
             if (!window.statusTimeInterval) {
                 window.statusTimeInterval = setInterval(updateStatusTime, 1000);
@@ -1179,13 +1207,31 @@
             
             muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
             muteButton.classList.toggle('muted', isMuted);
+            
+            showNotification(isMuted ? 'מערכת השמע הושתקה' : 'מערכת השמע הופעלה', 'info');
         }
 
-        // *** תיקון 5: טיפול נכון בהתראות מהשרת ***
+        function toggleVoice() {
+            isVoiceEnabled = !isVoiceEnabled;
+            localStorage.setItem('voiceEnabled', isVoiceEnabled);
+            
+            voiceButton.textContent = isVoiceEnabled ? '🗣️ התראות קוליות פעילות' : '🔇 התראות קוליות כבויות';
+            voiceButton.classList.toggle('enabled', isVoiceEnabled);
+            
+            const message = isVoiceEnabled ? 'התראות קוליות הופעלו' : 'התראות קוליות כובו';
+            showNotification(message, 'info');
+            
+            // בדיקה קולית
+            if (isVoiceEnabled && currentCity) {
+                setTimeout(() => {
+                    speakAlert(`התראות קוליות הופעלו עבור ${currentCity}`);
+                }, 500);
+            }
+        }
+
         function handleAlertUpdate(alert) {
             console.log('📥 התראה התקבלה:', alert);
             
-            // *** בדיקה חמורה: רק אם ההתראה רלוונטית לעיר הנוכחית ***
             if (alert.cities && alert.cities.length > 0 && currentCity) {
                 const isRelevantToMyCity = alert.cities.includes(currentCity);
                 console.log('🔍 בודק רלוונטיות:', {
@@ -1197,11 +1243,10 @@
                 
                 if (!isRelevantToMyCity) {
                     console.log('⚠️ התראה לא רלוונטית לעיר שלי - מתעלם');
-                    return; // התעלם מהתראה!
+                    return;
                 }
             }
             
-            // Prevent duplicate alerts
             if (alert.id && alert.id === lastAlertId) {
                 console.log('🔄 התראה כפולה - מתעלם');
                 return;
@@ -1213,13 +1258,19 @@
             
             updateAlertDisplay(alert);
             playAlertSound(alert.type);
+            
+            // הוסף הודעה קולית
+            if (isVoiceEnabled && currentCity && voiceMessages[alert.type]) {
+                setTimeout(() => {
+                    speakAlert(voiceMessages[alert.type](currentCity));
+                }, 1000); // עיכוב קטן אחרי הצליל
+            }
+            
             showNotification(`${alert.icon} ${alert.title}${currentCity ? ` ב${currentCity}` : ''}`, alert.severity || 'info');
             
-            // Update page title for urgent alerts
             if (alert.type === 'shelter') {
                 document.title = `🚨 אזעקה - ${currentCity}`;
                 
-                // Try to show browser notification
                 if ('Notification' in window && Notification.permission === 'granted') {
                     new Notification('🚨 אזעקה!', {
                         body: `${alert.description} ב${currentCity}`,
@@ -1231,7 +1282,6 @@
                 document.title = 'מערכת התראות חכמה - פיקוד העורף';
             }
             
-            // Add to history
             addToHistory(alert);
         }
 
@@ -1241,15 +1291,12 @@
             const statusTitle = statusCard.querySelector('.status-title');
             const statusDescription = statusCard.querySelector('.status-description');
 
-            // Update card class and colors
             statusCard.className = `status-card ${alert.class || 'safe'}`;
             
-            // Update content
             statusIcon.textContent = alert.icon || '✅';
             statusTitle.textContent = alert.title || 'מצב רגיל';
             statusDescription.textContent = alert.description || 'אין התראות פעילות';
 
-            // Update shelter time if relevant
             if ((alert.type === 'shelter' || alert.type === 'early-warning') && currentCity) {
                 updateShelterTime();
             } else {
@@ -1267,7 +1314,6 @@
                     throw new Error('API call failed');
                 }
             } catch (error) {
-                // Fallback to local data
                 const cityInfo = cityDataFallback[currentCity];
                 if (cityInfo) {
                     shelterTime.textContent = `${cityInfo.shelterTime} שניות`;
@@ -1278,7 +1324,7 @@
         }
 
         function playAlertSound(alertType) {
-            if (isMuted) return;
+            if (isMuted || !audioInitialized) return;
             generateAlertSound(alertType);
         }
 
@@ -1294,7 +1340,6 @@
             if (socket && socket.connected) {
                 socket.emit('get-history', currentCity);
             } else {
-                // If no connection, just hide loading and enable button
                 setTimeout(() => {
                     historyLoading.style.display = 'none';
                     refreshBtn.disabled = false;
@@ -1400,7 +1445,6 @@
         }
 
         function showNotification(message, type = 'info') {
-            // Remove existing notifications
             const existingNotifications = document.querySelectorAll('.notification');
             existingNotifications.forEach(notif => notif.remove());
 
@@ -1410,15 +1454,50 @@
             
             document.body.appendChild(notification);
             
-            // Trigger animation
             setTimeout(() => notification.classList.add('show'), 100);
             
-            // Auto remove after 5 seconds
             setTimeout(() => {
                 notification.classList.remove('show');
                 setTimeout(() => notification.remove(), 400);
             }, 5000);
         }
+
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 טוען מערכת התראות משופרת');
+            
+            // Set initial UI state
+            volumeControl.value = currentVolume;
+            muteButton.textContent = isMuted ? 'בטל השתקה' : 'השתק';
+            muteButton.classList.toggle('muted', isMuted);
+            voiceButton.textContent = isVoiceEnabled ? '🗣️ התראות קוליות פעילות' : '🔇 התראות קוליות כבויות';
+            voiceButton.classList.toggle('enabled', isVoiceEnabled);
+            
+            initializeSocket();
+            
+            loadCities().then(() => {
+                const savedCity = loadSavedCity();
+                if (savedCity) {
+                    console.log('🔄 עיר שמורה נמצאה:', savedCity);
+                    showNotification(`נטענה עיר שמורה: ${savedCity}`, 'info');
+                    
+                    // תיקון: הפעל את תהליך הרישום המלא אוטומטית
+                    setTimeout(() => {
+                        if (isConnected) {
+                            triggerCityRegistration(savedCity);
+                            showNotification(`התחבר אוטומטית ל${savedCity}`, 'success');
+                        } else {
+                            console.log('⏳ ממתין לחיבור לשרת לפני רישום אוטומטי');
+                        }
+                    }, 1000);
+                }
+            });
+            
+            setupEventListeners();
+            
+            updateConnectionStatus(false, 'מתחבר לשרת...');
+            updateApiStatus('checking', 'בודק מקורות נתונים...');
+        });
 
         // Request notification permission on load
         if ('Notification' in window && Notification.permission === 'default') {
@@ -1435,7 +1514,7 @@
             showNotification('אירעה שגיאה באפליקציה', 'danger');
         });
 
-        console.log('🚀 מערכת התראות חכמה נטענה בהצלחה - גרסה 2.1.0 עם תיקונים');
+        console.log('🚀 מערכת התראות חכמה נטענה בהצלחה - גרסה 3.0 עם תיקונים ותמיכה קולית');
     </script>
 </body>
 </html>
