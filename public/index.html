@@ -831,6 +831,7 @@
 
         // City data for shelter times (fallback)
      const cityDataFallback = {
+// נתוני ערים מעודכנים - רשימה מלאה + ערים חסרות
     'אבו גוש': { zone: 'ירושלים', shelterTime: 90, area: 203, established: 1994 },
     'אבן יהודה': { zone: 'שרון', shelterTime: 90, area: 1083, established: 1932 },
     'אום אל פחם': { zone: 'משולש', shelterTime: 90, area: 401, established: 1265 },
@@ -934,7 +935,34 @@
     'טייבה': { zone: 'משולש', shelterTime: 45, area: 404, established: 1200 },
     'טירת כרמל': { zone: 'חיפה והכרמל', shelterTime: 60, area: 402, established: 1992 },
     'תל אביב יפו': { zone: 'דן', shelterTime: 90, area: 102, established: 1909 },
-}
+    
+    // *** הוספת ערים חסרות שהופיעו בהתראות ***
+    // אזור ים המלח
+    'בתי מלון ים המלח': { zone: 'ים המלח', shelterTime: 60, area: 1301, established: 1960 },
+    'מלונות ים המלח מרכז': { zone: 'ים המלח', shelterTime: 60, area: 1302, established: 1960 },
+    'מלונות ים המלח צפון': { zone: 'ים המלח', shelterTime: 60, area: 1303, established: 1960 },
+    'מלונות ים המלח דרום': { zone: 'ים המלח', shelterTime: 60, area: 1304, established: 1960 },
+    'נווה זוהר': { zone: 'ים המלח', shelterTime: 60, area: 1305, established: 1969 },
+    'עין בוקק': { zone: 'ים המלח', shelterTime: 60, area: 1306, established: 1986 },
+    'מצדה': { zone: 'ים המלח', shelterTime: 60, area: 1307, established: -73 },
+    'עין גדי': { zone: 'ים המלח', shelterTime: 60, area: 1308, established: 1956 },
+    
+    // יישובי גבול נוספים
+    'מתת': { zone: 'גליל עליון', shelterTime: 15, area: 144, established: 1980 },
+    'מרגליות': { zone: 'גליל עליון', shelterTime: 15, area: 145, established: 1951 },
+    'דן': { zone: 'גליל עליון', shelterTime: 15, area: 146, established: 1939 },
+    'שמיר': { zone: 'גליל עליון', shelterTime: 15, area: 147, established: 1944 },
+    'הגושרים': { zone: 'גליל עליון', shelterTime: 15, area: 148, established: 1948 },
+    'נאות מרדכי': { zone: 'גליל עליון', shelterTime: 15, area: 149, established: 1946 },
+    
+    // אזור עוטף עזה
+    'שדה אברהם': { zone: 'עוטף עזה', shelterTime: 15, area: 1310, established: 1982 },
+    'תקומה': { zone: 'עוטף עזה', shelterTime: 15, area: 1311, established: 1949 },
+    'ניר עם': { zone: 'עוטף עזה', shelterTime: 15, area: 1312, established: 1943 },
+    'כפר עזה': { zone: 'עוטף עזה', shelterTime: 15, area: 1313, established: 1951 },
+    'נחל עוז': { zone: 'עוטף עזה', shelterTime: 15, area: 1314, established: 1951 },
+    'אור הנר': { zone: 'עוטף עזה', shelterTime: 15, area: 1315, established: 1957 }
+};
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
